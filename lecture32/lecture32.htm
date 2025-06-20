@@ -1,0 +1,255 @@
+<!-- saved from url=(0022)http://internet.e-mail -->
+<html>
+<head>
+<title>Lecture notes for CS330 (lecture - 32)</title>
+</head>
+<body text="#000000" link="#000000" vlink="#000000" background="../bg3.gif">
+<center>
+<h2>
+Position Independent Code and File Systems
+<p>
+Lecture-32<br>
+Operating Systems (CS330)</h2>
+</center>
+
+<h4>
+Lecturer: Deepak Gupta<br>
+Notes prepared by: Mohit Mundhra<br>
+Lecture Date: October 28, 2004 
+</h4>
+
+<!--
+	The Contents
+-->
+<a name= "content"></a>
+<h4>Contents</h4>
+<ul>
+<li><a href="#PIC"> Position Independent Code - an introduction.</a>
+<li><a href="#PICad">PIC: Advantages and Disadvantages.</a>
+<li><a href="#FS">File Systems</a>
+</ul>
+<hr>
+
+<!--
+	The Introduction
+-->
+
+<h4>
+About this Lecture
+</h4>
+<p>
+In this lecture we'll review the position independent code and have an introduction about file systems.
+</p>
+<hr>
+
+<!--
+	Section:	Position Independent Code
+-->
+
+<a name= "PIC"></a>
+<h4>Position Independent Code - an introduction</h4>
+<p>
+One of the biggest disadvantages of static linking is that each executable ends up containing its own copy of the library. When many statically linked programs using the same library are simultaneously executed on the same machine, a great deal of memory can be wasted, as each execution loads its own copy of the library's data into memory.
+<br>
+</p>
+<p>
+Suppose library code is not position independent. When you are compiling a library, code may get loaded at arbitrary addresses and similarly the data may be loaded at arbitrary addresses.
+Consider the following example of a method calling another method and a global variable of the same class.
+
+</p>
+<p>
+&nbsp;&nbsp;&nbsp; int y;<br>
+&nbsp;&nbsp;&nbsp; f( ) {<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; int x;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; g( );&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+&lt;<strike>&nbsp; </strike>&nbsp;call address of g.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; x = y;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+&lt;<strike>&nbsp; </strike>&nbsp; this is reference from code to data<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; ....<br>
+&nbsp;&nbsp;&nbsp; }<br>
+&nbsp;&nbsp;&nbsp; ...<br>
+&nbsp;&nbsp;&nbsp; ...<br>
+&nbsp;&nbsp;&nbsp; ...<br>
+&nbsp;&nbsp;&nbsp; g( ) {<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; ....<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; ....<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; }<br>
+<br>
+Similarly in data I might have references. eg.<br>
+&nbsp;&nbsp;&nbsp; int z = &amp;y;<br>
+&nbsp;&nbsp;&nbsp; int y;<br>
+&nbsp;&nbsp;&nbsp; int (*fp) ( ) = f ;<br>
+<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+y will be in BSS (as it is not initialized).<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; data = addr of&nbsp; y&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+&lt;<strike>&nbsp; </strike>&nbsp;patch this value with the value of symbol y.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; fp = addr of&nbsp; f&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+&lt;<strike>&nbsp; </strike>&nbsp;patch this address with the value of symbol g.<br>
+
+<br>When program starts executing,<i> ld.so</i> figures out that the code has to 
+be loaded, loads it in specific address space, calculates position of g, x, y 
+and patch them up at run time. This is known as <b>Dynamic Relocation.</b><br>
+When we map this in memory, memory copy of code and data must be modified. both 
+processes must have their own copy of data but there is no reason for them to 
+have different copies of codes, at least in principle.<br>
+Library gets mapped to different locations in the memory( in the two processes). 
+The only way to avoid multiple copies of code is that we should have written the 
+code in such a fashion that it works regardless of where it is loaded in the 
+memory. For this it may maintain some table which has the addresses and the 
+table must be small.</p>
+
+<p>Given size of <i>f</i>, we can find out position of <i>g</i> relative to
+<i>f</i> and similar we can do with the data. If I want to call <i>g</i>, I 
+can't use its absolute address as I do not know that. I can't use its&nbsp; 
+relative address as it may be very far away. But one thing which I can do is 
+to add the offset in a register and the register will contain the absolute 
+address of the next instruction.<br>
+Now, problem is to find absolute address of one instruction. And if we can 
+somehow find the address of one instruction we can find the address of any 
+instruction.<blockquote>
+	f( ) {&nbsp; g:&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+	// call g<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; call next; // relative<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; next: pop R1&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+	// these two instructions are just to get the current address <br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+	// Now i know how far g() is.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; add R1, #(g - next), R2&nbsp;&nbsp;&nbsp;&nbsp; 
+	// R2 contains the absolute virtual address of g<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+	// #(g - next) -- immediate constant -- assembler has to figure this out.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; call ind R2&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+	// indirect call to R2 -- to get the contents of R2<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; add R1, #(y - next), R2<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; load ind R2, R3<br>
+	}<br>
+	g( ) {<br>
+	....<br>
+	....<br>
+	}</blockquote>
+<p>What would have happened if g and y would be in the other library.<br>
+- create the PLT and GOT entries of g and y.<br>
+- each process will have - different copies of data<br>
+- shared code<br>
+- shared PLT<br>
+- different copy of GOT<br>
+asks the linker to fill the table at runtime and my code will use this table.<br>
+<br>
+if y is in other library<br>
+add R1, #(got(y), next), R2<br>
+</p>
+
+
+<p><a href="#content"> Back to Contents</a></p><hr>
+
+
+<!--
+	Section:              PIC: Advantages / Disadvantages 
+-->
+
+<a name= "PICad"></a>
+<h4>PIC: Advantages / Disadvantages</h4>
+Saving that to memory is not free, it is using extra redirections. But its 
+cost is much less than what will be wasted on memory. Position independent code 
+is less efficient that direct calls but we save a lot on memory calls.<br>
+Advantages:<ul>
+	<li>&nbsp;Size of the executable is small</li>
+	<li>If the library changes, we do not have to re-link the program</li>
+</ul>
+<p>Disadvantages:</p>
+<ul>
+	<li>Program startup is slower</li>
+</ul>
+
+<p>
+<p>But this slow startup time&nbsp; can be reduced by using <i>Lazy Binding</i>.<br>
+<i>Lazy binding</i> is a technique using which the right address for a function 
+need not be determined (and placed in a GOT) till the function is first called. 
+We will not go into the details of this mechanism here. However, it should be 
+evident, that this significantly reduces the program start up time, as also the 
+overall overhead of dynamic linking since only a small fraction of library 
+functions would actually get called in a typical run of a program.</p>
+<p><a href="#content"> Back to Contents</a></p><hr>
+
+
+<!--
+	section:	File System
+-->
+
+
+
+<a name= "FS"></a>
+<h4>File Systems</h4>
+<p><b>File</b>: File is a sequence of bytes. OS does not put any interpretation on it. Files are named 
+and contain data.</p>
+<p>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; FILE --- data<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+|--- metadata - information about the file<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+|--- size<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+|--- permission / owner<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+|--- time stamp<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+|--- location of data on disk<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+|--- filename (Filename is a metadata in UNIX but directory name a data).<br>
+<br>
+<br>
+<b>Directories</b>:<br>
+A directory is a collection of files. It allows easy management of files. A 
+directory can be hierarchical and hence a directory may contain sub-directories.<br>
+<br>
+<b>Inode</b>: Structure that stores metadata of a file. Each inode has unique 
+inode number in a file system. Filename is not stored in inode.<br>
+<br>
+<b>File permission</b>: owner, group<br>
+|--uid of user<br>|--group to which the user belongs<br>
+<br>
+chown&nbsp; <strike>&nbsp; </strike>&gt; changes the owner of the file ( only the 
+super user can do this)<br>
+chgrp&nbsp; <strike>&nbsp; </strike>&gt; changes group to any group it belong to<br>
+<br></p><center>
+<i><font size="2">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; rwx&nbsp;&nbsp;&nbsp; rwx&nbsp;&nbsp;&nbsp; rwx <br>
+--- &nbsp;&nbsp;&nbsp; ---&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; --- &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; ---<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; owner group others</font></i> </center>
+<center><b><font size="2">&nbsp;&nbsp;&nbsp; File Permissions</font></b></center><br>
+<br>
+check <strike>&nbsp; </strike>&gt;&nbsp;&nbsp; owner matches, else group, else 
+others.<br>
+chmod <strike>&nbsp; </strike>&gt;&nbsp; changes permission (octal number)<br>
+<br>
+<b>Sticky bit</b>: If program runs on memory and exits, then keep a copy on memory as 
+it may be called again.<br>
+<b>Setuid bit</b>: The setuid bit is a way to allow other users to access and write to 
+your files in a restricted way.<br>
+<br>
+For example, suppose i want to write a logging program which creates a log in a 
+single file to which the log of many users is written. This means that the log 
+file is writable by everyone. However, this is very unsafe as you can modify 
+other users&#39; written data. Thus making the file writable by everyone is not a 
+good solution to the logging problem. To prevent this Unix has a <i>setuid </i>
+bit which sets the user id of the program being executed to that of the owner 
+of the executable file.<br>
+Another example can be the password file <i>/etc/passwd</i> which is owned by 
+the root, but each user can change her password as the setuid bit of passwd file 
+is set.</p>
+<p>
+<p><a href="#content"> Back to Contents</a></p><hr>
+
+<h4>Related Links On Similar Topics</h4>         
+
+<ul>
+<li>
+<a href="http://encyclopedia.thefreedictionary.com/position%20independent%20code">
+Position Independent Code - Reference</a><li>
+<a href="http://www.llnl.gov/CASC/components/docs/users_guide/node192.html">
+Linkers and Position Independent Code</a><li>
+<a href="http://www.cs.uiowa.edu/~jones/opsys/notes/16.html">The Unix Setuid 
+Mechanism</a> (Recommended)</ul>
+
+<p><a href="#content"> Back to Contents</a></p><hr>
+</body>
+</html>

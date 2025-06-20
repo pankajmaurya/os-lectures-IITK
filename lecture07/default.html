@@ -1,0 +1,131 @@
+<html>
+<head>
+<title>Lecture notes for CS330 (Lecture - 7)</title>
+<!--
+	replace n above by the lecture number
+-->
+</head>
+<body text="#000000" link="#000000" vlink="#000000" background="..\bg3.gif">
+
+<center>
+<h2>
+Context Switching
+<p>
+Lecture-7<br>
+Operating Systems (CS330)
+</h2>
+</center>
+
+<h4>
+Lecturer: Deepak Gupta<br>
+Notes prepared by: Neha Sugandh<br>
+Lecture Date: August 16, 2004
+</h4>
+
+<h4>Lecture Contents:</h4>
+<ul>
+<li> Context Switching - when and how it occurs
+<li> Flow of control inside the kernel during context switch
+</ul>
+<hr>
+
+<h4>
+Context Switching - when and how it occurs
+</h4>
+We have already seen what scheduling is and when it occurs.  To recapitulate,
+scheduling occurs whenever the currently running process either voluntarily
+relinquishes the CPU (because it is terminating or going to sleep) or when
+it is forced to (by, for example, the clock interrupt handler; this is called
+<i>preemption</i>).  In either case, a scheduler function in the kernel code
+is called (in the context of the currently running process).  The scheduler 
+function uses the scheduling strategy to select the
+most eligible ready to run process for running next on the CPU.  It then
+needs to perform a <i>context switch</i> from the currently running process
+to this selected process.
+<p>
+Context switch from one process to another process requires saving the 
+state of the  currently running process and loading the saved state of the new 
+process. The major components of the ``process state'' that need to be switched
+are its address translation tables, and the values of CPU registers.
+The address translation tables for all processes are usually always in memory,
+so switching them is simply a matter of changing the special CPU register
+that holds a pointer to the address translation tables to point to the
+address translation tables for the new process.  This value can be obtained
+from the PCB of the new process.
+<p>
+Note that the switching of the address translation tables has no immediate
+effect since the execution is currently within the kernel, and typically
+the kernel code and data is mapped to the same part of the virtual
+address space of each process (with protection mechanisms to ensure that
+this part of the address space can only be accessed in the supervisor mode
+of the processor).
+<p>
+Next, the current CPU state of the currently running process needs to be
+saved and the previously saved state of the new process needs to be restored.
+The CPU state consists essentially of the values of the CPU registers.
+To do this, an assembly coded switch routine is called.  The switch
+routine simply saves all register values in the PCB
+of the current process and restores these values from the PCB of the new 
+process.
+<p>
+Note that when the current process had entered the kernel (through an interrupt
+or trap etc.), its CPU state had been saved.  However this saved CPU state 
+reflected the state of the user level computation at the time the interrupt
+occurred or the trap was executed.  Within the kernel, the process then
+followed some path of execution and acquired some CPU state.  This is the
+CPU state that must be saved at the time of context switch.
+<p>
+Note also that the stack stores a substantial amount of state that forms the
+``execution history'' for a process.  This does not need to be explicitly
+saved though since the stack is already in memory.  What does need to be saved
+is the current stack pointer value which is held in a register and hence
+gets saved by the switch routine.  Since the switch routine also restores
+the stack pointer value for the new process, effectively once the register
+value restoration is complete, the stack of the new process is being used.
+Thus the switch routine returns in the context of the new process!
+<p>
+The variable <i>current</i> that holds a pointer to the PCB of the currently
+running process also needs to be changed during context switch.  This is,
+of course, a simple matter.
+
+<center>
+<img src="6.jpg" width = "450">
+<p>
+<b><i> CPU switch from process to process </i></b>
+</center>
+<p>
+
+<b>Note: </b>When a process executes in the kernel, it uses a different stack
+than the one that it uses in user mode.  The kernel allocates a fixed sized
+kernel stack for every process at the time of process creation.
+Immediately on entering the kernel (through an interrupt, trap etc.),
+the stack pointer register is changed (by the interrupt handler code) to 
+point to the kernel stack.  The old value of the stack
+pointer is of course saved first to the kernel stack.
+<p>
+The user stack and the kernel stack must be different for 
+the following reasons:
+<ol> <li>When the process was running in the kernel mode the
+stack might have carried some sensitive values which should not be revealed to 
+the user. Even after these values are popped they are not physically
+ erased from the memory and hence are accessible to the user if the process has a common stack for user and kernel mode execution.
+<br>
+ <li> While executing in the kernel mode the process should not run out
+of stack. If the process runs out of stack in the user mode, an exception 
+occurs. But this should not happen when the process is in the 
+kernel mode.
+</ol>
+<hr>
+
+<b>A few related links:</b>
+<P>
+<li><a href = "http://user-mode-linux.sourceforge.net/als2000/node9.html">Context Switching</a>
+<li><a href ="http://www.cs.gordon.edu/courses/cs322/lectures/processes_threads.html">Threads and processes</a>
+<li><a href="http://www.csd.uwo.ca/faculty/beau/CS305/CS305-Processes.html">Processes</a>
+<li><a href="http://www.linuxjournal.com/article.php?sid=2941">A look at linux kernel scheduler</a>
+<li><a href="http://www.uwsg.iu.edu/UAU/process/manage.html">Process management in UNIX</a>
+<li><a href="http://cs-www.cs.yale.edu/homes/avi/os-book/aosc/slide-dir/index.html">Link to the slides of Applied OS concepts by  Silberschatz, Galvin and Gagne</a>
+<li><a href = "http://www.cs.unm.edu/~crowley/osbook/begin.html">Operating Systems by Charles Crowley </a>
+
+</body>
+</html>

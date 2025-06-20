@@ -1,0 +1,142 @@
+<html>
+<head>
+<title>Lecture notes for CS330 (lecture - 4)</title>
+
+</head>
+<body text="#000000" link="#000000" vlink="#000000" background="..\bg3.gif">
+
+<center>
+<h2>
+System Calls and Operating System Execution Model
+<p>
+Lecture-4<br>
+Operating Systems (CS330)
+</h2>
+</center>
+
+<h4>
+Lecturer: Deepak Gupta<br>
+Notes prepared by: Rohit Garg<br>
+Lecture Date: August 3, 2004
+</h4>
+
+<p>
+<br>
+<a name = "Contents"> </a>
+<h4>
+Contents
+</h4>
+<ul>
+<li> <a href = "#Topic1">Implementation of System Calls </a> <br>
+<li> <a href = "#Topic2">Execution Model of the Operating System </a> <br>
+
+</ul>
+<p>
+<hr>
+<a name = "Topic1"> </a>
+<h4>
+Implementation of System Calls
+</h4>
+<p>
+The interface between the operating system and the user programs is defined 
+by the set of system calls that the operating system provides. Hence it is 
+important for us to understand the implementation of the system calls in 
+general, i.e., details of how the control
+goes from a user level program to the kernel etc. 
+
+<p>
+To request a service from the operating system (i.e., to make a system call), 
+a user program needs to execute the <i>trap</i> instruction.  As we have
+seen earlier, this causes the CPU to save some critical registers, change
+mode of execution to the supervisor mode, and jump to a trap handler routine
+which is part of the operating system.  Since the
+trap instruction (typically) does not have any operands, a mechanism is
+needed to specify which system call is being invoked and what are the parameters
+for the system call.
+
+<p>The system call is identified using a <i>system call number</i>.
+The operating system assigns a unique system call number to each distinct
+system call that it supports.  In Linux, you can find the system call numbers
+corresponding to various system calls by examining the header file:
+<tt>/usr/include/asm/unistd.h</tt>.
+
+<p>Before executing the trap instruction, the user program must place the
+system call number in an ``agreed upon location'', typically either a register
+or the stack.  Similarly, the arguments must be placed in agreed upon locations,
+again either registers or the stack.  The trap handler in the operating system
+code picks up the system call number and its arguments from these locations
+and calls the appropriate function in the OS code (depending on the system
+call number) to carry out the operation requested by the user program.  
+Finally, the return value of executing the system call is placed by the
+trap handler in an agreed upon location before executing the <i>return from
+interrupt</i> instruction.  Then the user program regains control, and picks
+up the return value from this location. These conventions, i.e., the system 
+call number assignment, where the system call
+number and arguments are placed, how the return value of the system call is
+returned to the user program etc., constitute the <i>Application Binary
+Interface</i> (ABI) of the operating system.
+
+<p>Under Linux running on x86 processors, the conventions are: system call
+number is placed in register EAX, the arguments in EBX, ECX etc., and the
+return value is placed in register EAX again.
+
+<p>In a C program, the system calls can be made as if they were ordinary
+library functions.  How is this achieved?  Clearly, the compiler (for 
+obvious reasons) does not have builtin knowledge about system calls 
+supported by the Operating System.  Rather, corresponding to each system
+call there is a library function in the C library, which places the
+system call number, arguments etc., at the right place, executes the
+trap instruction, and then returns the result (usually after some small
+modifications) to the calling function.
+
+<p>To understand the ABI better, write a simple Hello, world program in C,
+compile and statically link it (using the -static option of gcc), then examine
+the assembly code of the library function <tt>write</tt> using gdb.  Use
+the command ``disass write'' at the gdb prompt for this.
+
+<p>
+<a href = "#Contents">Back To Contents </a>
+<p>
+<hr>
+<a name = "Topic2"> </a>
+<h4>
+Execution Model of the Operating System
+</h4>
+<p>
+An operating system is also (usually) a C program with the usual main function.
+However, its execution model is very different from that of usual C programs.
+A C program defines some computation to be performed.  In other words, it has
+an `agenda' of its own, a predefined flow of control that determines how the
+code will behave.  An operating system on the other hand is more like a library
+of useful functions (we saw this analogy in a previous lecture) and has no
+computation of its own to perform.  Once the initializations are over (this is
+what the main function of the operating system does, more on it in the next
+lecture), the OS code simply processes interrupts and system calls as they
+occur.
+
+<P>
+Thus, the OS code should be seen as a passive rather than an active entity.
+We have already seen informally
+what the term process means (an instance of a program execution) though we
+will revisit this notion soon.  When a process (running some user program
+in the user mode of the processor) makes a system call, as we know, the
+trap handler (which is part of the OS code) starts executing.  We say that
+at this point, the OS code is executing <i>on behalf of</i> the process, or
+equivalently, the process is <i>running inside the OS</i>, or that the OS
+code is running <i>in the context of</i> the said process, rather than 
+simply saying that the OS is running.  Note that if a user process is running,
+and an interrupt occurs, the OS code handles the interrupt in the context
+of the currently running process, even though the interrupt may not have
+been caused by an action of this process.
+
+<P>
+
+<a href = "#Contents">Back To Contents </a>
+<p>
+<hr>
+<b>References:</b>
+<ul>
+<li> Operating System Concepts by <i>Galvin, Gagner and Silberschatz</i>.
+<li> Modern Operating Systems by <i>Tanenbaum</i>.
+</ul>
+<hr>

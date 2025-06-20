@@ -1,0 +1,174 @@
+<html>
+<head>
+<title>Lecture notes for CS330 (lecture - 39)</title>
+<!--
+	replace n above by the lecture number
+-->
+</head>
+<body text="#000000" link="#000000" vlink="#000000" background="bg3.JPG">
+
+<center>
+<h2>
+Interrupt Handling in Device Drivers and Disk Scheduling
+<p>
+Lecture-39<br>
+Operating Systems (CS330)
+</h2>
+</center>
+
+<h4>
+Lecturer: Deepak Gupta<br>
+Notes prepared by: Vivek Misra<br>
+Lecture Date: Nov. 18, 2004
+</h4>
+
+<h4><a name=content></a>Contents</h4>
+
+<ul>
+ <li> <a href="#intro">Introduction to the Lecture</a> </li>
+ <li> <a href="#IH">Interrupt Handling</a> </li>
+ <li> <a href="#DS">Disk Scheduling Introduction</a> </li>
+ <li> <a href="#OS">Optimal Scheduling Algorithm</a> </li>
+ <li> <a href="#AL">Disk Scheduling Algorithm</a> </li>
+
+</ul>
+<hr>
+<a name=intro>
+<h4>
+Introduction :
+</h4>
+In the last class we looked at few aspects of Device Drivers which are kernel 
+level software modules that understands and implements the interface specific 
+to the drive. We also saw some uses and functions of the device drivers. In this 
+lecture we will study interrupt handling in device drivers and then disk scheduling.
+<p>
+
+<hr>
+<a name=IH>
+<h4>
+Interrupt Handling :
+</h4>
+The Device Driver for an interrupt driven device handles the interrupts from that 
+device. The processing required depends upon the type of the device. The device 
+driver for the device must clearly supply the function required to handle the interrupts 
+from that device.
+<p>
+<img src="working.JPG" width="539" height="308">
+<br>
+The firgure above tells what happens when an interrupt is received. The sequence of arrows 
+show basic stages in interrupt handling.
+<p>
+There are two kinds of things to be done while handling interrupts:<br>
+1.Things that must be immediately done: Things like acknowledging interrupts and performing 
+hardware operations need to be done as soon as interrupts arrive. For eg. acknowledging a key 
+press interrupt and reading the key code from the keyboard controller buffer. This needs to be 
+done immediately because the device controller buffer is small and there may be more key presses. 
+If this data is not soon copied into memory then chances are that we may loose some data.
+<p>
+<img src="PCstruct.JPG" width="328" height="237"> 
+<p>
+2.Things that can be delayed: For eg. post processing or cooking of the data received from a 
+terminal device. Anything that can be delayed must be delayed.
+<p>
+The first set of actions are done immediately as the interrupt arrives and hence it is called 
+<i>"top half processing"</i>. The second set that can be delayed comes under <i>"bottom half 
+processing"</i>. Although they are called <i>half</i>, they are not. Top half can be just 5% 
+and bottom half 95%.
+<p>
+In any interrupt handling, first whatever top half processing needs to be done is done and 
+the bottom half tasks are scheduled. Top half tells the kernel that these bottom half tasks 
+need to be done. The tasks are added in a data structure which is a list of tasks. The 
+added entry is basically some function pointer and its parameters. The kernel performs the 
+bottom half tasks just before returning to the user mode. At this point there are no pending 
+interrupts. This is the only stage when tasks could be done because they might need locks and may 
+cause deadlocks.
+<p>
+
+<hr>
+<a name=DS>
+<h4>
+Disk Scheduling :
+</h4>
+Here we will study the disk-scheduling algorithms that schedule the order of disk I/Os to 
+improve performance. The disk is the slowest storage device in a computer. To remove the 
+vast difference in the speeds of memory and disk we do various sort of things at different 
+levels. They are:
+<p>
+1.Caching
+<p>
+2.Layout data on the disk considering seek time and rotation time delays.
+<p>
+3.Disk-scheduling is the third level mechanism. To have a look at its importance consider 
+two processes P which reads from a file f and Q which reads from a file g. If f and g are 
+on cylinder group far away from each other then each time a process gets scheduled we will 
+be wasting a lot of time as seek time delay.
+<p>
+
+Therefore, disk-scheduling turns out to be fairly important. We can inmprove both access time 
+and the disk bandwith by scheduling the servicing of the disk I/O request in some order. It is 
+basically a part of disk device driver.
+<p>
+
+<hr>
+<a name=OS>
+<h4>
+Optimal Solution:
+</h4>
+<p>
+<img src="graph.JPG" width="512" height="384">
+<p>
+Let us consider that there is a list of pending disk requests. Now consider the graph G = (V,E) 
+where V = cylinder group corresponding to all the pending disk requests and E = edge between 
+each pair of vertices such that weight of the edge between vertices Ci and Cj ( note Ci and Cj are
+cylinder groups) is proportional to the seek time taken by the head to move form Ci to Cj. Now finding 
+the optimal solution is same as finding the lowest cost hamiltonian cycle starting from the initial 
+vertice which is the initial position of the disk arm. But this problem is NP-hard problem. So we try to 
+have approximate algorithms for the same.
+<p>
+
+<hr>
+<a name=AL>
+<h4>
+Disk Scheduling Algorithms:
+</h4>
+<b>First Come First Serve (FCFS) :</b> The one who asks for the service first gets served first. This 
+is the simplest and the fairest of all the algorithms. This algorithm is free from any sort of 
+starvation. Although everyone gets an equal chance, this algorithm does not provide the fastest 
+service. We could have done better if we would have used the information about the current head position 
+and about the sequence of the remaining requests.
+<p>
+
+<b>Shortest Seek Time First (SSTF):</b> Here we service the request which is closest to the current 
+head position i.e. SSTF algorithm selects the request with the minimum seek time. This uses greedy 
+algorithm and is not optimal. This algorithm is not fair as those requests that are near the center 
+of the disk get undue advantage. This algorithm may cause starvation of some requests. For eg. consider 
+a continual stream of requests arriving near one another. In this case a request far away may get starved.
+This scenario becomes increasingly likely if the pending-request queue grows larger. Therefore we have 
+good average service time but variance in the service time is huge.
+<p>
+
+<b>Elevator Algorithm :</b> Here the disk arm starts at one end of the disk, and moves towards the other 
+end, servicing requests as it reaches each cylinder, until it gets to the other end of the disk. At the, 
+other end, the direction of the head movement is reversed, and the servicing continues. The head 
+continuously scans back and forth across the disk. This algorithm is also called as SCAN algorithm. It 
+is a dumb algorithm because the arm travels from one end to the other end even if there is no request 
+pending at the far end. This algorithm is also not the fairest algorithm. It is less efficient than the 
+SSTF algorithm and has a lesser average service time but it has lesser variance in service time than SSTF. 
+Therefore it is more fair than SSTF.
+<p>
+
+<b>LOOK Scheduling:</b> It is a variation of SCAN scheduling. Here arm goes as far as the final request 
+in each direction. Then it reverses back immediately without going all the way to the end of the disk. This 
+prevents the useless movement of the disk arm and hence increases the average service time.
+<p>
+
+<b>C-SCAN and C-LOOK scheduling:</b> Like in SCAN, in C-SCAN moves the head from one head to the other servicing 
+the requests along the way with an exception. In this, request gets serviced in one direction only. No 
+request is serviced in the reverse direction or on the return trip. This although decreases the overall 
+average servicing time, it decreases the variance in service time and hence fairness increases significantly.
+C-LOOK is essentially same as LOOK but with the same sort of modification.
+<hr>
+<p>
+
+</body>
+</html>

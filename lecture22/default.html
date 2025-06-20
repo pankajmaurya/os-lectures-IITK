@@ -1,0 +1,347 @@
+<html>
+<head>
+<title>Lecture notes for CS330 (lecture - 22)</title>
+</head>
+<body text="#000000" link="#000000" vlink="#000000" background="..\bg3.gif">
+
+<center>
+<h2>
+CPU Scheduling
+<br>
+Lecture-22<br>
+Operating Systems (CS330)
+</h2>
+</center>
+
+<h4>
+Lecturer: Deepak Gupta<br>
+Notes prepared by: Nisheet Jain<br>
+Lecture Date: September 20, 2004
+</h4>
+<a name = "Contents"></a>
+<ul>
+<li> <a href = "#Topic1">Introduction </a> </li>
+<li> <a href = "#Topic2">Life-Cycle of a Process</a> </li>
+<li> <a href = "#Topic3">Performance Measures</a> </li>
+<li> <a href = "#Topic4">Scheduling Strategies</a> </li>
+     <ul>
+     <li> <a href = "#Policy41">First Come First Serve</a> </li>
+     <li> <a href = "#Policy42">Shortest Job First </a> </li>
+     <li> <a href = "#Policy43">Shortest Remaining Time First</a> </li>
+     <li> <a href = "#Policy51">Priority Based Scheduling</a> </li>
+     <li> <a href = "#Policy52">Round Robin Scheduling </a> </li>
+     <li> <a href = "#Policy53">Multilevel Queue Scheduling</a> </li>
+     </ul>
+</ul>
+<hr>
+<h3>About the Lecture</h3>
+In this lecture we will learn about CPU scheduling. Starting from explaining why do we need CPU scheduling, we will discuss what are the various criteria that affect system performance and hence should be considered while designing a scheduling policy. Finally we will discuss some simple, though not realistic
+scheduling policies.
+
+<a name = "Topic1"> </a>
+<h3>Introduction</h3>
+
+<p>CPU scheduling is the basis of multiprogramming. The scheduling algorithm
+can have a big impact on the resource utilization and the overall performance of the system.
+
+<p>The objective of multiprogramming is to have some process running at all times, in order to maximize CPU utilization. On uni-processor systems, only one 
+process can be running at any given time, any other processes must wait until 
+CPU is free to be rescheduled.
+
+<p>In multiprogramming, if a process is waiting for some event to occur (release of some resource), then rather than CPU sitting idle for that much time, we want the waiting process to release the CPU so that some other process can continue its execution on CPU
+
+<p>The operating system maintains a ready queue of processes. Processes on 
+this queue are ready to be executed. Whenever a currently executing process 
+needs to wait (for I/O completion, release of a lock etc.) the operating system picks a process from the ready queue and assigns the CPU to that process. The cycle then continues.
+Most operating systems also sometimes <i>preempt</i> the CPU from the currently
+running process.
+
+<p>CPU Scheduling may occur when:
+<ol>
+<li>the current process switches from running to waiting state, i.e., it 
+voluntarily gives up the CPU. This could be because the process needs to wait
+for an I/O operationn to complete, or for a child process to terminate, or 
+for a synchronization operation (like lock acquisition) to complete.
+<li>
+a process switches from running to ready state, i.e., when a process is
+woken up. If the scheduler switches processes in this case, it has preempted 
+the running process. 
+<li>
+an interrupt handler (typically the timer interrupt handler) requests
+<i>preemption</i>.
+<li>the currently running process terminates.
+</ol>
+
+It is easy to see that scheduling <i>must</i> occur in cases 1 and 4 above
+since the current process cannot run any longer immediately.  In cases 2
+and 3, scheduling would occur only if the system implements a 
+<i>preemptive scheduling policy</i>.  Under some preemptive policies,
+however (for example, in BSD and Linux), scheduling may occur in case
+3 but not in case 2.  In Solaris, scheduling can occur in all four cases.
+We shall study the BSD, Linux, and Solaris scheduling policies in the
+subsequent lectures.  If scheduling occurs only in cases 1 and 4, the
+scheduling policy is called <i>non-preemptive</i>.  Clearly, for general
+purpose, multi-user operating systems, preemptive scheduling is preferable
+since it does not allow any process to hog the CPU at the expense of
+others.
+
+<h4>Basic Terminology</h4>
+<dl>
+<dt><i>The CPU Scheduler</i></dt>
+<dd> The OS module that decides the process to run next on the CPU.
+</dd>
+<dt><i>The Ready Queue</i></dt>
+<dd>List of all runnable processes.  The CPU scheduler picks the ``best''
+candidate from this list according to its scheduling policy.
+This is an important data structure.  All ready to run processes are
+in this queue.  This structure is maintained so that during scheduling,
+the scheduler does not have to look at all processes in order to find
+runnable processes.  Also, the queue implementation should allow the
+scheduler to find the ``best process to run'' in as little time as
+possible.  Thus, though called a queue, the ready queue may or may not
+actually be maintained as a FIFO queue.
+</dd>
+<dt><i>The Dispatcher</i></dt>
+<dd>The OS module that handles the mechanics of context switching
+when the scheduler decides to run another process.
+</dd>
+</dl>
+
+<p><a href = "#Contents">Back to Contents</a>
+
+<a name = "Topic2"> </a>
+<h3>Life-Cycle of a Process:</h3>
+All processes alternately perform computations (CPU bursts) and I/O
+(I/O bursts).  During the former the process is running (or is runnable and
+waiting in the ready queue), while during the latter it is sleeping.
+Note that when a process sleeps (for any reason whatsoever), we consider
+this as an I/O burst in the context of CPU scheduling.  Of course, as you
+know, processes often sleep for reasons other than I/O as well.
+<p>Thus a process' life time can be described by CPU bursts and I/O bursts.
+A process starts with a CPU burst and then alternates CPU bursts and I/O bursts
+and finally terminates with a last CPU burst.
+<p>The lengths of CPU bursts depend on program characteristics: short for
+interactive programs and large for computation intensive programs.  Usually
+CPU burst lengths are exponentially or hyper-exponentially distributed -
+most CPU bursts are very small.
+
+<p>The scheduling policy that is most appropriate for a system depends on
+the expected job mix.  Different policies may be more or less suited for
+different kinds (interactive or computation intensive) of jobs.  Most
+general purpose operating systems assume a mix of interactive and compute
+intensive jobs.
+
+<p><a href = "#Contents">Back to Contents</a>
+
+<a name = "Topic3"> </a>
+<h3>Performance Measures </h3>
+There are different criteria which can be used to measure the efficiency and 
+productivity of a scheduling algorithm. These measures can be used to compare 
+different scheduling algorithms and thus help in choosing the best according 
+to one's requirements. Some such measures are the following.
+<dl>
+<dt><i>CPU utilization</i>
+<dd>
+The fraction of time during which the CPU is busy. For ease of
+implementations, most operating systems have an idle thread which executes 
+when there is no ready to run process.  Thus CPU Utilization is the
+fraction of time for which the idle thread is <i>not</i> running (i.e., some 
+other process is running).
+<dt><i>Throughput</i>
+<dd>
+The number of jobs finished per unit of time.
+This is an important parameter for compute intensive jobs.  Clearly, this
+is not a useful parameter for interactive jobs.
+<dt><i>Turnaround time</i>
+<dd>
+The time taken by a job to finish (from the time of submission of the
+job process to the time of its completion). 
+<dt><i>Waiting time</i>
+<dd>
+The amount of time that a process spends waiting for the processor in the
+ready queue.
+<dt><i>Response Time</i>
+<dd>
+Time taken by an interactive process to respond to a user input.
+Clearly, this is the most important parameter from the point of view of 
+interactive applications. The response time depends directly on the waiting 
+time.
+</dl>
+<p>An ideal scheduling algorithm would be one that has the maximum CPU 
+utilization and throughput, and minimum turnaround time, waiting time, and 
+response time for a given set of jobs.  However, some of the measures are
+in conflict with others.  For example, reducing the response time would
+require frequent context switches which will, due to their overhead, lead
+to lower throughput.
+
+<p><a href = "#Contents">Back to Contents</a>
+
+<a name = "Topic4"> </a>
+<h3>Scheduling strategies</h3>
+There are many algorithms, ranging in complexity and performance.
+Let us start by looking at some simpler algorithms.
+
+<a name = "Policy41"></a>
+
+<p><b>First Come First Serve (FCFS) Scheduling</b> 
+
+<p>
+This algorithm treats the ready queue as a FIFO queue. Thus, processes are 
+executed in the order in which they were put on the queue.  By definition there is no preemption
+<p>
+A <i>Gantt Chart</i> is a useful device for understanding the behavior of
+a scheduling policy for a specified set of jobs.  Essentially, it is a 
+diagram that shows what processes were executing on the processor at
+different points in time.
+
+<p>
+Here is an example that shows the Gantt chart for FCFS scheduling for
+the specified set of jobs.
+
+<center><img src="fcfs.jpg"></center>
+
+<p>
+FCFS is a non-preemptive policy.  In any non-preemptive policy, the
+response time for interactive jobs may be very high if there are some CPU
+bound (compute intensive) jobs in the system.  Specifically in the FCFS
+policy, the waiting time may be high as short jobs wait for the long job to
+get off the CPU.  The FCFS policy may also leady to the ``convoy effect''
+which results in poor CPU and device utilization.  A CPU bound jobs has
+long CPU bursts.  While this job executes on the CPU, the other jobs finish
+their I/O bursts and the I/O devices are idle.  Once this job finishes its
+CPU burst, it starts an I/O burst.  Meanwhile the other jobs quickly finish
+their CPU burst and also start I/O.  Now the CPU is idle.  This cycle may
+repeat leading to poor overall CPU and I/O device utilization.
+ 
+
+<p><a href = "#Contents">Back to Contents</a>
+
+<br><a name = "Policy42"></a>
+<p><b>Shortest Job First (SJF) Scheduling</b>
+<p>This algorithm implements a priority queue based on the next CPU burst length. The next process to execute will always have the shortest CPU burst.
+
+<center><img src="SJF1.jpg"></center>
+
+<p>This algorithm is provably optimal in terms of the average waiting time
+among all non-preemptive scheduling algorithms. The problem in this algorithm 
+lies in the inability to predict the exact burst time of a process. 
+
+<p>One can estimate the length of the next CPU burst of a process based on
+its past behavior, for example, using an exponential average as follows.
+
+<blockquote>
+&tau;<sub><i>n</i>+1</sub> = &alpha; <i>t</i><sub><i>n</i></sub> +
+(1 - &alpha;) &tau;<sub><i>n</i></sub>
+</blockquote>
+where &tau;<sub><i>i</i></sub> is the estimated length of the
+<i>i</i><sup>th</sup> burst, <i>t</i><sub><i>i</i></sub> is the
+actual length of the <i>i</i><sup>th</sup> burst, and &alpha; is a
+constant between 0 and 1.
+<p>
+The exponential average is a weighted average of the latest sample
+and the past history.  To understand it, consider the expanded form
+of the formula above:
+<blockquote>
+&tau;<sub><i>n</i>+1</sub> = &alpha; <i>t</i><sub><i>n</i></sub> +
+(1 - &alpha;) &alpha; <i>t</i><sub><i>n</i>-1</sub> +
+(1 - &alpha;)<sup>2</sup> &alpha; <i>t</i><sub><i>n</i>-2</sub> + 
+&nbsp;&nbsp; ...&nbsp;&nbsp; +
+(1 - &alpha;)<sup><i>n</i>+1</sup> &alpha; <i>t</i><sub>0</sub>
+</blockquote>
+Here the first estimate &tau<sub>0</sub> may be taken as the system wide
+average of CPU bursts.  In the extreme case, when &alpha; is 1, the
+estimate for the duration of the next burst is the just the actual length
+of the previous burst, ignoring past behavior.  When 0 &lt; &alpha; &lt; 1,
+exponentially decreasing weightage is given to the lengths of the past
+bursts with more weightage to more recent bursts.  This tries to model the
+fact that the behavior of the same program may vary in phases.  Clearly,
+the performance of the SJF policy heavily depends upon how accurate the CPU
+burst length prediction is.
+
+<p><a href = "#Contents">Back to Contents</a>
+
+<a name = "Policy43"></a>
+<p><b>Shortest Remaining Time First</b>
+
+<p>This is a preemptive version of the SJF policy.  A running job may be
+preempted by a new job with a shorter burst than the <i>remaining time</i>
+in the current burst of the currently running job. Prediction of the
+burst length is again, of course, a problem.  
+<center><img src="SRTF.jpg"></center>
+<p>
+It is easy to show that this policy has provably the shortest average
+waiting time for any given set of jobs among all (preemptive and
+non-preemptive) scheduling policies.
+
+<p><a href = "#Contents">Back to Contents</a>
+
+<a name = "Policy51"></a>
+<p><b>Priority Based Scheduling</b>
+<br>Shortest Job First is just a special case of a class of scheduling 
+algorithms called priority based scheduling algorithms. These algorithms
+assign priorities to jobs, and the scheduler always chooses the highest
+priority runnable process.  Priority based scheduling may be preemptive
+or non-preemptive.  A common problem with all priority based algorithms
+is that higher priority jobs may starve lower priority jobs.
+<p>
+An important problem related to priority based scheduling is in the 
+assignment of priorities to processes.  If the priorities are assigned by
+the users, how can the system ensure that users do not get unfair advantage
+by assigning high priorities to their jobs?  Clearly, if all jobs have the
+same priority, the policy degenerates to a FCFS policy (assuming that the
+ties among jobs with equal priorities are broken by arrival times).  On the
+other hand, if the system is to assign priorities, on what basis should it
+do so?
+
+<p><a href = "#Contents">Back to Contents</a>
+
+<a name = "Policy52"></a>
+<p><b>Round-Robin Scheduling</b>
+
+<p>The Round-Robin scheduling algorithm has a FIFO queue, similar to the 
+FCFS algorithm. However there is the notion of a <i>time quantum</i> which
+is a fixed small period of time (typically 100 to 200 ms).  A process is
+preempted by after running for at most one time quantum and then goes back
+to the end of the ready queue.  The algorithm always picks up the process
+at the head of the queue to run next on the CPU.
+<p>
+An advantage of round robin scheduling is that the waiting time and the
+response time are bounded (given the number of processes).  However the
+time quantum must be selected carefully.  If it is very large, the policy
+degenerates to FCFS.  On the other hand, if the time quantum is very small,
+the throughput decreases and the turnaround times increase due to the overheads
+of the large number of context switches.  However, the average turnaround
+time does not necessarily decrease with a larger time quantum (why?).  In
+general, the turnaround time can be improved if most CPU bursts are smaller
+than a time quantum.
+
+<p><a href = "#Contents">Back to Contents</a>
+
+<a name = "Policy53"></a>
+<p><b>Multilevel Queue Scheduling</b>
+
+<br>A multilevel queue scheduling algorithm categorizes processes into a
+small number of distinct classes, for example, system processes,
+interactive processes, batch processes etc. (see figure below).  Each class has a different
+priority.  Processes in a higher priority class have an absolute precedence
+over those in lower priority classes (preemptive priority scheduling).
+Within a class, processes may be scheduled in a round robin, FCFS manner
+etc.  In fact, it is possible to have different scheduling strategies in
+different priority classes.  For example, round robin scheduling might be
+used for interactive processes, and FCFS for batch processes.
+
+<center><img src="MPQ.jpg"></center>
+<p>
+If the classes of processes are selected carefully, it is unlikely that
+there will be too many high priority processes with long CPU bursts.  It is
+nonetheless possible in principle that lower priority processes are
+starved.  One possible solution is to share the CPU time among the various
+classes in a fixed proportion.  Thus, for example, the background class can
+get 20% of the CPU time for scheduling its processes in a FCFS manner.
+
+<p><a href = "#Contents">Back to Contents</a>
+
+<hr>
+
+</body>
+</html>

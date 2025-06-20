@@ -1,0 +1,299 @@
+<html><head><title>Lecture notes for CS330 (lecture - 37)</title><!--
+	replace n above by the lecture number
+--></head><body background="default_files/bg3.gif" link="#000000" text="#000000" vlink="#000000">
+
+<center>
+<h2>
+Block Allocation Policy and Caching
+<p>
+Lecture-37<br>
+Operating Systems (CS330)
+</p>
+</h2>
+</center>
+
+<h4>
+Lecturer: Deepak Gupta<br>
+Notes prepared by: Deepak Bharti<br>
+Lecture Date: November 11, 2004
+</h4>
+<!---Table of Contents---->
+<p>
+<br>
+<a name="Contents"> </a>
+</p><h4>
+Contents
+</h4>
+<ul>
+<li> <a href="#Topic1">About this Lecture </a> <br></li>
+<li> <a href="#Topic2">Block Allocation Policy </a> <br></li>
+<li> <a href="#Topic3">Caching</a> <br></li>
+<li> <a href="#Topic4">Cache Data Structure and LRU policy</a> <br></li>
+<li> <a href="#Topic5">Read-Ahead and Delayed Write</a> <br></li>
+<li> <a href="#Topic6">File System Inconsistencies </a> <br></li>
+<li> <a href="#Topic7">References </a> <br></li>
+</ul>
+
+<!---sections start here---->
+<hr>
+<a name="Topic1"> </a>
+<h4>
+About this Lecture
+</h4>
+In the last lecture we dealt with Inode Allocation policy, we would now discuss
+Block Allocation policy. We will discuss about Caching in order to
+minimise disk access which improves overall performance and would further discuss
+about read ahead and delayed write policy in Caching. Finally we shall discuss
+File System Inconsistencies.
+<p><a href="#Contents">Back to contents</a> </p>
+
+<p></p>
+<!------Block allocation policy ---------->
+<p>
+</p><hr>
+<a name="Topic2"> </a>
+<h4>
+Block Allocation Policy
+</h4>
+
+<li><u>Global Policy </u></li>
+<p>
+<i> Aim :</i> Minimise the seek delay <br><br>
+If it is the first file block then allocate a block in the CG where inode
+of the file is present else try to allocate a new block for a file in the
+same CG as the previous block of the file.
+<br>
+We can easily analyse that soon we would be filling the same CG, we should
+not overdo this as there might be other files growing in the same CG.
+Hence we should decide on a upper limit on the size of file on a specific CG.
+<br>
+When 25% of the CG is occupied by a file then it needs to be redirected
+to another CG.<br>
+</p>
+
+<li><u>Local Policy</u><br></li>
+<p>
+<i> Aim :</i>Minimise the rotational delay <br><br>
+Having selected the CG, which block should we chose within the CG! <br>
+The policy says to handle requests for specific blocks, use them if they are
+available, else check for a sequence of alternatives. The policy can be stated
+in the following format.
+</p><ol>
+<li>Allocate Rotationally Optimal block in the same cylinder (w.r.t previous block of file) </li>
+<li>If that is not free, allocate rotationally closest block within the same cylinder.</li>
+<li>If no block in the same cylinder is available, allocate any block in the same CG that was allocated. </li>
+<li>If the cylinder group is full, rehash to get a new cylinder group and look there for a new block. </li>
+<li>If the above fails, use an exhaustive search for all cylinder groups. </li>
+</ol>
+<p></p>
+<p><a href="#Contents">Back to contents</a> </p>
+
+
+<!------Caching ---------->
+<p>
+</p><hr>
+<a name="Topic3"> </a>
+<h4>
+Caching
+</h4>
+
+<p>
+In addition to the hardware caching, most operating systems use software <em>disk
+caching</em>. Since the system memory is many orders of magnitude faster than the hard disk,
+a small area of system memory is set aside to buffer requests to the hard disk. When reading
+data from the disk, the kernel intially attempts to read from the buffer cache. If the data
+is already in the cache, the kernel does not have to read from the disk or else it reads the
+data from the disk and caches it for further use.
+</p>
+
+<p align="center">
+<img src="default_files/cache.png" border="2">
+</p>
+
+<p>The global inode table also serves as the Inode Cache. The inode cache contains copies
+of inodes for open files and for some recently used files which are no longer open. The
+number of inodes cached is controlled by some parameter(maximum no of Files to be Cached).<br>
+The Directory Entry Cache contains the copies of directory entries which are predicted to
+be used frequently.<br>
+Device drivers do not know about the FS structure so the Cache present simply caches
+disk blocks without knowing what it contains. The input would be device number and disk
+block number and it would use some hashing scheme to return the block if present in cache,
+else fetches it from memory and then according to cache eviction policy stores it in cache
+for future use.
+</p>
+
+<p align="center">
+<img src="default_files/cacheStruct.png" border="2">
+</p>
+
+<p>
+Valid bit checks the validity of the object in the cache. The free/locked bit informs whether
+the cache location is free or locked. Free bit says that if no one is using the object
+then it can be used.<br>
+We can easily see that if the valid bit is false then necessarily the free bit should
+be true. Whereas if the valid bit is true, the free bit can be both true and false,
+viz both valid and free bit are true when some valid data is used by none.<br>
+If both valid and locked are true then we have to wait, if free then make it locked &amp;
+remove it from free list and start using it.<br><br><i>When should a value be locked into the cache</i><br>
+<i>Disk cache :</i> for the duration of the system call.<br>
+<i>Inode cache :</i> for the time that the file is open.
+</p>
+<p><a href="#Contents">Back to contents</a> </p>
+
+
+<!-----Cache Data Structure and LRU---------->
+<p></p><hr>
+<a name="Topic4"> </a>
+<h4>
+Cache Data Structure
+</h4>
+
+<p>
+The  Disk Block Cache uses a indexed hash table using a  doubly linked list to store
+blocks. Some hash function is used to hash the device number and the block number to
+the list. All buffers with data from blocks corresponding to a hash value are linked
+in a hash list corresponding to this hash value. A free list is also formed using all
+the free buffers.
+</p>
+<p align="center">
+<img src="default_files/hash.jpg" border="2">
+</p>
+
+<h4>
+Least Recently Used replacement policy (LRU)
+</h4>
+<p>
+Cache Misses are responsible for Cache evictions. To deal with Cache evictions we need some
+good policy to boost the performance, and LRU seems to do the trick. We can implement exact
+LRU by following these steps:
+</p><ol type="i">
+<li>Whenever we free a buffer (unlock), we add it to the end of the free list.</li>
+<li>Whenever we need to take something we take it from the head of free list.</li>
+Hence the free list would be sorted in order of access time.
+</ol>
+<p></p>
+
+
+<p><a href="#Contents">Back to contents</a> </p>
+
+
+<!------Read ahead and Delayed Write ---------->
+<p>
+</p><hr>
+<a name="Topic5"> </a>
+
+<h4>
+Read Ahead
+</h4>
+<p>
+It is an algorithm that tries to save as much good data in the cache as possible. <br>
+When a cache miss occurs say for the <i>i</i>th block, we need to read it from disk.
+Our algorithm suggests us to read the <i>i+1</i>th block after we have read <i>i</i>th
+block in anticipation that it would be read soon.<br>
+The Disk I/O for <i>i+1</i>th block would be done in background which might be overlapping
+with the execution of some program.
+</p>
+The algorithm would be
+<pre>	while(not eof(f)){
+		read(f,buffer,N)
+		process(buffer)
+	}
+</pre>
+<p>
+When the buffer is being processed, disk may be busy as data may be read. By the time
+processing is completed we may get the next data in Cache and if we are lucky the next
+data request would have been fetched via read ahead and we won't need to wait for the
+next data through a Disk I/O. Similarly when <i>i+1</i>th block is processed we might
+have read ahead <i>i+2</i>th block. We are sure to gain in terms of performance.
+</p>
+
+<h4>
+Delayed Write
+</h4>
+<p>
+Our algorithm tries to minimize the frequency of disk write operations. <br>
+It tries to determine whether the data must be stored immediately on disk .We might
+be wasting Disk I/O as
+</p><ol type="i">
+<li>The data may be transient which would be overwritten soon. or </li>
+<li>It may be a temporary file which would get deleted (of no further use).</li>
+</ol>
+The reliability issues say that we can&#8217;t hold the data for long, we need to flush the
+data frequently because the holding may lead to data loss due to power failure or
+Hardware failure (computer hangs). Hence a Daemon runs in background which would flush
+the data with dirty bit set. Meta-Data(including directories information) is flushed
+more often than data blocks as there is danger of landing up into corrupt file system.
+
+<p></p>
+
+<p><a href="#Contents">Back to contents</a> </p>
+
+
+<!------File System Inconsistencies---------->
+<p>
+</p><hr>
+<a name="Topic6"> </a>
+<h4>
+File System Inconsistencies
+</h4>
+<p>
+Since files and directories are kept in main memory and on disk, care must be taken to
+ensure that system failure does not result in loss of data or data inconsistencies.
+File System Inconsistencies mainly arise due to delayed writes, where we tend to gain
+on speed by sacrificing on reliability.<br>
+File system can become inconsistent due to several reasons and the most common is abnormal
+shutdown due to hardware failure, power failure or switching off the system without
+proper shutdown. Due to these reasons the super block in a file system is not updated and
+has mismatched information  relating to system data blocks, free blocks and inodes.
+Generally a special program <i>fsck</i>(file system check) a Unix utility is used for
+checking and repairing file system inconsistencies .
+There is lot of redundant data which helps the program to check for the inconsistencies, viz-
+</p><ol type="i">
+<li>Bitmap of used and free inodes.
+</li><li>Each inode has a flag which says used or free.
+</li></ol>
+
+We try to recover the file inconsistencies by :-
+<li>Scanning  all inodes to check that each block is in exactly one file, or on the free
+list, but not both.</li>
+<li>We also check that the number of links to each file (part of the metadata in the file's
+inode) is correct (by looking at all directories).</li>
+Explanation:
+Root directory has fixed number (generally 2), we can check this and then recursively for
+the entire tree. For each directory entry we can find out the inodes used. For each inode
+count the number of links and check if it matches the link count, if it doesn&#8217;t then we
+try to correct it .<br>
+We can decrease the link count as required, for e.g if link count = 2 but the directory
+entry = 1 then we can fix it by assigning the value of dir entry to link count. If link
+count is finite but no directory entry exist then we create a link with <em>/lost+found
+</em>directory. We try to bring it back to some consistent state as we cannot go
+to the exact state, otherwise inconsistency would not have arrived.<br>
+Super block has a bit which says that the File System was cleanly unmounted.
+<p><a href="#Contents">Back to contents</a> </p>
+
+<!------section---------->
+<p>
+</p><hr>
+<a name="Topic7"> </a>
+<h4>
+References
+</h4>
+Here is a list of few references for this lecture.
+<ul>
+<li> Operating System Concepts, Silbertschatz, Galvin and Gagne, 6 th Edition.</li>
+<li><a href="http://www.vyomworld.com/gate/cs/os/13.asp">
+File System Implementation</a></li>
+<li><a href="http://web.cse.iitk.ac.in/%7Ecs330/www03-04/notes/buffercache/buffercache.htm">
+Last years Course website (Buffer Cache).</a></li>
+<li><a href="http://cag.csail.mit.edu/%7Erinard/osnotes/h13.html">
+Other courses site [1] - (File System Implementation)</a></li>
+<li><a href="http://www.cs.nyu.edu/%7Egottlieb/courses/2000-01-spring/os/lectures/lecture-20.html">
+Other courses site [2] - (File System Consistency and Performance) </a></li>
+<li><a href="http://www.die.net/doc/linux/man/man8/fsck.8.html">
+fsck(8) - Linux man page</a></li>
+</ul>
+<p></p>
+<p><a href="#Contents">Back to contents</a> </p>
+<p>
+</p><hr>
+</body></html>

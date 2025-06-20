@@ -1,0 +1,52 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN"
+"http://www.w3.org/TR/html4/loose.dtd">
+<html>
+<head>
+<title>Lazy procedure linkage with the PLT</title>
+<meta http-equiv="Content-Type" content="text/html; charset=iso-8859-1">
+<style type="text/css">
+<!--
+body {
+	background-image: url(images/bg3.gif);
+}
+-->
+</style></head>
+
+<body>
+<h2>Lazy procedure linkage with the PLT </h2>
+Programs that use shared libraries generally contain calls to a lot of functions. In a single run of the program many of the functions are never called, in error routines or other parts of the program that aren't used. Furthermore, each shared library also contains calls to functions in other libraries, even fewer of which will be executed in a given program run since many of them are in routines that the program never calls either directly or indirectly.
+<p>To speed program startup, dynamically linked ELF programs use lazy binding of procedure addresses. That is, the address of a procedure isn't bound until the first time the procedure is called.
+<p>ELF supports lazy binding via the Procedure Linkage Table, or PLT. Each dynamically bound program and shared library has a PLT, with the PLT containing an entry for each non-local routine called from the program or library, Figure 3. Note that the PLT in PIC code is itself PIC, so it can be part of the read-only text segment.
+<p>
+<table border="3" align="center">
+  <tr>
+    <td></td>
+    <td><em>Figure 3: </em> PLT structure in x86 code <br>
+      Special first entry
+      <p><br>
+          <code>PLT0: pushl GOT+4 <br>
+        jmp *GOT+8
+          </code>
+      <p>
+            <p>Regular entries, non-PIC code:
+      <p><br>
+              <code>PLTn: jmp *GOT+m <br>
+        push #reloc_offset <br>
+        jmp PLT0
+            </code>        <p>
+            <p>Regular entries, PIC code:
+      <p><br>
+              <code>PLTn: jmp *GOT+m(%ebx) <br>
+        push #reloc_offset <br>
+        jmp PLT0 </code>      
+      <p></p></td>
+  </tr>
+</table>
+</p>
+<p>All calls within the program or library to a particular routine are adjusted when the program or library is built to be calls to the routine's entry in the PLT. The first time the program or library calls a routine, the PLT entry calls the runtime linker to resolve the actual address of the routine. After that, the PLT entry jumps directly to the actual address, so after the first call, the cost of using the PLT is a single extra indirect jump at a procedure call, and nothing at a return.
+<p>The first entry in the PLT, which we call PLT0, is special code to call the dynamic linker. At load time, the dynamic linker automatically places two values in the GOT. At GOT+4 (the second word of the GOT) it puts a code that identifies the particular library. At GOT+8, it puts the address of the dynamic linker's symbol resolution routine.
+<p>The rest of the entries in the PLT, which we call PLTn, each start with an indirect jump through a GOT entry. Each PLT entry has a corresponding GOT entry which is initially set to point to the push instruction in the PLT entry that follows the jmp. (In a PIC file this requires a loadtime relocation, but not an expensive symbol lookup.) Following the jump is a push instruction which pushes a relocation offset, the offset in the file's relocation table of a special relocation entry of type R_386_JMP_SLOT. The relocation entry's symbol reference points to the symbol in the file's symbol table, and its address points to the GOT entry.
+<p>This compact but rather baroque arragement means that the first time the program or library calls a PLT entry, the first jump in the PLT entry in effect does nothing, since the GOT entry through which it jumps points back into the PLT entry. Then the push instruction pushes the offset value which indirectly identifies both the symbol to resolve and the GOT entry into which to resolve it, and jumps to PLT0. The instructions in PLT0 push another code that identifies which program or library it is, and then jumps into stub code in the dynamic linker with the two identifying codes at the top of the stack. Note that this was a jump, rather than a call, above the two identifying words just pushed is the return address back to the routine that called into the PLT.
+<p>Now the stub code saves all the registers and calls an internal routine in the dynamic linker to do the resolution. the two identifying words suffice to find the library's symbol table and the routine's entry in that symbol table. The dynamic linker looks up the symbol value using the concatenated runtime symbol table, and stores the routine's address into the GOT entry. Then the stub code restores the registers, pops the two words that the PLT pushed, and jumps off to the routine. The GOT entry having been updated, subsequent calls to that PLT entry jump directly to the routine itself without entering the dynamic linker. </p>
+</body>
+</html>

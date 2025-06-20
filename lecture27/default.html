@@ -1,0 +1,173 @@
+<html>
+<head>
+<title>Lecture notes for CS330 (lecture - 27)</title>
+<!--
+	replace n above by the lecture number
+-->
+</head>
+<body text="#000000" link="#000000" vlink="#000000" background="..\bg3.gif">
+
+<center>
+<h2>
+x86 Address Translation and Demand Paging
+<p>
+Lecture-27<br>
+Operating Systems (CS330)
+</h2>
+</center>
+
+<h4>
+Lecturer: Deepak Gupta<br>
+Notes prepared by: Jagdish Chandra Meena<br>
+Lecture Date: October 07, 2004
+</h4>
+
+<h4><a name=content></a>Contents</h4>
+
+<ul>
+ <li> <a href="#intro">Introduction to the Lecture</a> </li>
+ <li> <a href="#AT">x86 Address Translation</a> </li>
+ <li> <a href="#DP">Demand Paging</a> </li>
+ <li> <a href="#PH">Page Fault handling</a> </li>
+
+</ul>
+<hr>
+<a name=intro>
+<h4>Introduction
+</h4>
+In this lecture we first look at the address translation in the x86 
+architecture. We then start discussing demand paging -- a very important
+technique related to virtual memory.
+
+<p><a href="#content">Back to Contents</a> <p>
+<hr>
+<a name=AT>
+<h4>x86 Address Translation
+</h4>
+X86 processors have 32 bit physical addresses.  The virtual address space is
+also 32 bits, though virtual addresses are 48 bits wide!  
+The x86 architecture combines segmentation with 2-level paging.
+A virtual address consists of a 16 bit segment number, held in one of the
+special segment registers such as CS, DS, SS etc., and a 32 bit offset within
+the segment.  Upto 16K segments can be defined and each segment can be of any
+size from 1 byte to 4GB.  The segments may overlap.  The 48 bit virtual address 
+is first translated into a 32 bit <i>linear address</i> which is then translated
+to a physical address using 2-level page tables.
+<p>
+There are two segment tables - an LDT (Local Descriptor Table) per process,
+and a system wide GDT (Global Descriptor Table).  Each GDT or LDT entry
+(called a <i>segment descriptor</i>) contains the 32 bit starting linear
+address for the segment and its size.  Each descriptor also contains a
+<i>privilege level</i> that indicates the processor modes in which this
+segment can be used, as well as modes (read, write, execute) in which the
+segment can be accessed.  The value in a segment register identifies both a
+descriptor table (GDT or LDT) and the specific descriptor within this table.
+
+<p><b>Linear to Physical Address Translation</b></p>
+As mentioned above, the translation of linear to physical addresses is
+performed using a 2-level paging scheme.  The 10 most significant bits in the
+linear address are used as index into the first level page table (called the
+<i>page directory</i>), the next 10 bits are used as index into the second
+level page table, and the least significant 12 bits are used as offset within
+the page.  Thus the page size is 4KB.  This translation process is illustrated
+by the figure below.
+<p align=center ><img src="2.jpg" height="500" width="750"></p> 
+</p>
+
+<p></p><a href="#content">Back to Contents</a> <p></p>
+<hr>
+
+
+<a name=DP>
+<h4>Demand Paging</h4>
+We now study a very important technique related to memory management: 
+demand paging. Demand paging allows efficient use of memory and also increases 
+the effectively available memory size by using a storage device (such as the 
+disk) as an extension of memory.
+
+<p>
+The essential idea of demand paging is that not all accessible pages of the
+virtual address space of a process need to be in physical memory at all times.
+Some pages may be "paged out" i.e., they are stored on a swap device rather 
+than in memory.  The valid bit for such pages (in the corresponding page table
+entries) would be 0.  For such pages, the page table entry can store the disk 
+address of the page instead of the physical frame number.
+If the process tries to access such a page, a page fault exception occurs
+(since the valid bit is 0) and the exception handler needs to bring in 
+the page from disk to memory, change the page table entry accordingly, and
+restart the instruction.
+<p>
+Demand paging allows the operating system to make more efficient use of 
+memory by storing some pages that are not expected to be used soon
+in a swap device (usually a disk partition dedicated for this use).
+Note that this is conceptually like extending the memory hierarchy (L1 cache, L2
+cache, main memory) to yet another level (disk).  Essentially the main memory
+is being used as a cache of recently used data from the next level of the
+memory hierarchy (the swap device, i.e., the disk, which is slower but bigger).  The difference of course
+is that this level of the memory hierarchy is implemented entirely in the
+software.
+
+<p></p><a href="#content">Back to Contents</a> <p></p>
+<hr>
+
+<a name=PFH>
+<h4>Page Fault Handling</h4>
+Page fault handling is one of the most critical aspects of demand paging
+implementation.  When a page fault occurs, it could be either because the page
+is inaccessible to the process, or because the page is really valid but not
+present in physical memory.  The page fault handler must distinguish between
+the two cases and take appropriate action in each.  Here is an outline of the 
+steps involved in page fault handling.
+<ol>
+<li>check whether the accessed page is actually accessible to the faulting 
+process. If not,send a signal to the process.</li>
+<li>Otherwise, find a free frame in memory .</li>
+<li>If there is no free frame available, select a <i>victim frame</i> 
+according to the <i>page replacement policy</i> and</li>
+	<ol type=i>
+	<li>Write the victim frame to the swap device.</li>
+	<li>Update page table of the process owning the victim frame to reflect 
+	that the victim page is no longer in memory</li>
+	<li>Free the victim frame and use it for the faulting process.</li>
+	</ol>
+<li>Read contents of the page into the free frame from the disk.</li>
+<li>Update page table of the faulting process.</li>
+<li>Restart the faulting process (i.e., return from exception handler).</li>
+</ol>
+
+Note that since the main memory is being treated as a cache for the swap
+device, a cache replacement policy is needed.  This is called the page
+replacement policy, and decides which frame of main memory should be evicted
+back to the disk when a free frame is needed and none is available.  As you
+can expect, a good page replacement policy is crucial for good performance of
+the demand paging system.  We shall study some page replacement policies in
+the next lecture.
+<p>
+Also note that in step 3(i) above, the victim frame needs to be written to the 
+disk only if it is ``dirty'' i.e., it  has been modified since it was last 
+read from the disk. Most hardware implementations support this optimization 
+using a dirty bit in the page table entries that is set
+whenever the page is modified. When the page is brought into memory from the 
+disk, the OS clears  this bit. If the hardware does not support the dirty bit, 
+it can be simulated by the OS (at some cost obviously) by using the protection 
+bits.  The idea is that the OS can deny the write permission for a writeable 
+page. When a process attempts to write  to the page, the hardware generates a 
+<i>protection fault</i>. The fault handler determines whether the process is 
+actually permitted to write to the page and if yes, marks it dirty and enables 
+the write permission.
+<p>
+Page fault handling requires information  about:
+<ul>
+<li>which frames are free</li>
+<li>the owner process(es) of a given frame and the corresponding page table 
+	entries</li>
+<li>disk block address for the page on the swap device.
+</ul>
+This information is typically stored in a frame table 
+(called the core map in BSD) which has one entry per physical frame.
+
+<p><a href="#content">Back to Contents</a> <p>
+<hr>
+
+</body>
+</html>

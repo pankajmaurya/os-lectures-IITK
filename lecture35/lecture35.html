@@ -1,0 +1,238 @@
+ <html>
+<head>
+<title>Lecture notes for CS330 (lecture - 35)</title>
+<!--
+	replace n above by the lecture number
+-->
+</head>
+<body text="#000000" link="#000000" vlink="#000000" background="bg3.gif">
+
+<center>
+<h2>
+File System Implementation
+<p>
+Lecture-35<br>
+Operating Systems (CS330)
+</h2>
+</center>
+
+<h4>
+Lecturer: Deepak Gupta<br>
+Notes prepared by: Deepak Jorwal<br>
+Lecture Date: November 8, 2004
+</h4>
+
+<h4><a name=content></a>Contents</h4>
+<ul>
+<li><a href="#topic1">Multiple FileSystem Types</a></li>
+<li><a href="#topic2">Multiple FileSystem Implementation </a></li>
+<li><a href="#topic3">File System Implementation</a></li>
+<li><a href="#topic4">Data Organisation on Disk</a></li>
+<li><a href="#topic5">Block Allocation Methods</a></li>
+<li><a href="#topic6">FAT FileSystem</a></li>
+</ul>
+<p><a name=  topic1></a>
+In this lecture we will look at the various File System types and how does the OS implement multiple File systems. Further we will discuss about various File System implemantation techniques in the context of data organisation on disk and block allocation stratgies.</p> 
+
+
+<h4><a name = "topic1"></a>Multiple File System Types</h4>
+
+<p>Modern operating systems(MS Windows, UNIX etc.) support multiple types of FileSystem. 
+For example, Linux supports several file systems such as FAT, ext2, ext3, NFS, iso 9660 (for CD-ROM) etc.
+Here is a brief introduction about some of these file systems:
+<ul>
+<li><p><i>FAT :</i> FAT stands for <i>File Allocation Table</i>. This file system does not have a notion of inode. Here meta-data are stored in the directory
+entry itself. The FAT file system is simple and reliable. It does not lose data because the computer crashed in the middle of an update. It does not use a lot of memory. It does, however, do a lot of <i>extra administrative I/O</i> to different areas of the partition. 
+The directory is allocated at the start of the partition and it contains the <i>table</i> of freespace. To write a new dataset, or to add data to an old one, the disk arm must be constantly moved between the location of the directory and the place where the data is being written. Without optimization, a file can end up <i>fragmented</i> into manysmallpieces.</p></li>
+
+<li><p><i>Ext2 :</i> The <i> Second Extended File  System</i> was devised (by Rémy Card) as an extensible and powerful file system for <i>Linux</i>. It is also the most successful file system so far in the Linux community.
+EXT2 defines the file system topology by describing each file in the system with an <i>inode</i> data structure. As we have seen earlier an <i>inode</i> describes which blocks the data within a file occupies as well as the access rights of the file, 
+the file's modification times and the type of the file. Every file in the EXT2 file system is described by a single inode and each inode has a single <i>unique</i> number identifying it. The inodes for the file system are all 
+kept together in <i>inode tables</i>. EXT2 directories are simply special files (themselves described by inodes) which contain pointers to the inodes of their directory entries.</p></li>
+
+<li><p><i>NTFS :</i> NTFS was designed to allow <i>very large partition size</i>, in anticipation of growing hard disk capacities. It allows file names to be up to 255 characters, instead of the <i>8+3 character</i> limitation of conventional FAT. NTFS implements specific features to allow important transactions to be completed as an integral whole, to avoid data loss, and to improve <i>fault tolerance</i>.It provides <i>defragmentation</i> capability to overcome the fragmentation problem.</p></li>
+	
+<li><p><i>NFS :</i> NFS, or the <i>Network File System</i>, was originally developed by Sun Microsystems in the 1980's as a way to create a file system on diskless clients. NFS provides remote access to shared file systems across networks. 
+This means that a file system may actually be sitting on machine A, but machine B can mount that filesystem and it will look to the users on machine B like the file system resides on the local machine. In this way NFS is transparent to the user.
+ NFS was also designed to be machine, operating system, network architecture, and transport protocol independent..</p></li>
+
+<li><p><i>proc :</i> The <i>Linux process File system</i> known as the proc file system is an example of a file system whose contents are not actually stored anywhere bu are computed on demand and according to user file I/O requests.</p></li>
+</ul>
+</p>
+
+<a href="#content">Back to Contents</a>
+
+<h4><a name = "topic2"></a>Multiple File System Implementation</h4>
+
+<p> As we know that most of the OS support multiple file systems. But the questions arise here are that 
+<dl>
+<dd> Q. How does OS organise its kernel code to be supported for multiple file systems ?
+<dd> Q. How can users seamlessly move between file-systems types?
+</dl>
+<p> An obvious solution is  write  directory and file routines for each type of file system.
+but this is not an optimal method. Because some of the basic functionalities are common among different file systems so why we should implement them separately.</p>
+<p>Another solution is to use <i>object oriented</i> techniques to organize and modularize the implementation. In this method the kernel file system code is divided into a <i>generic code layer</i> (called the virtual file system layer) and code specific to the various file system types.The code for each supported file system exports a well defined for all files and inode operations.</p>
+
+<p align="center">
+<img border="0" src="picture0.png" width="500" height="310"></p>
+
+<p>The inode includes some information for all file system types (FS independent), some file system specific information and an array of function pointers which point to the functions in the file system specific code for performing various file operations. This inode is called as <i>vnode (virtual node)</i>.</p>
+
+<dd><i>In Linux, the file table entry as well as the inode contains a table of function pointers. The file table entry stores the function pointers for performing file operations (such as read, write etc.) while the inode stores the pointers for performing inode operations (such as chmod, chown etc.).</i>
+</p>
+
+<a href="#content">Back to Contents</a>
+<h4><a name = "topic3"></a>File System Implementation</h4>
+
+<p>In this section we will see some basic aspects to be considered while choosing a file System and its implementation technique. Design choice for a file system is guided by <i>performance</i> because the system's performance is very much dependent on file system's performance. Earlier we saw that while making basic file system related system calls, we have to access disk. Disks are very slow relative to CPU speed. So while waiting for a disk I/O to complete, lots of CPU cycles are wasted. So Disk I/O is really  bottleneck in the peformance of computers.
+ 
+<dl>
+	<dt><i>Caching</i>
+	<dd>Caching is one way to reduce the number of disk I/O need to be performed. In this technique , we store or retain the recently read data. But it is not possible to use cache for large storage. That's why we also discuss the case when a cache miss occurs and we actually have to perform Disk I/O. 
+</dl>
+
+So now we will discuss about how can we make Disk I/O faster. Before that lets briefly take a look over disk hardware and Data Organisation an disk.
+</p>
+
+<a href="#content">Back to Contents</a>
+<h4><a name = "topic4"></a>Disk and Data Organisation on Disk</h4>
+
+<dl>
+	<dt><i>Review of Disk Hardware</i>
+
+	<ul>
+		<li>A hard disk has several disks(platters) stacked on top of one another and mounted on a rotatory drive, rotating at a uniform speed.
+		<li>Both surfaces of each disk are coated with a magnetic material and can store data.
+		<li>Each disk surface has concentric circular <i>tracks</i> for data storage. Each track is radially divided into number of <i>sectors</i>.Each sector can store typically 512 bytes and is also the smallest unit of disk I/O.
+		<li>Set of corresponding tracks on all surfaces of stack of disks is known as <i>cylinder</i>.
+		<li>Each disk surface or platter has one <i>head assembly </i>for reading and writing. A disk head has transducers that transform data from magnetic to electric form. Read or write operations start on sector boundaries. 
+		<li>Address on disk is specified using surface number ( or head number ), track number and sector number.
+	</ul>
+
+<p align="center">
+<img border="0" src="picture1.png" width="600" height="270"></p>
+
+	<dt><i>Data Transfer Time</i>
+	<dd>Data Transfer Time is the time eclapsed between the disk I/O request and
+	get data into disk controller buffer. Data Transfer Time consists of:	
+	<ul>
+		<li><i>Seek Time :</i> Time to reach the head to appropriate track. It depends on how long the head has to move.
+Since head motion is a mechanical process, it takes lomg time compare to the other processes and hence makes a great contribution in Data Transfer Time.
+		<li><i>Rotational Delay :</i> After reaching to the correct head, this is the time to allow the correct sector 
+to come below the head. The amount of rotational delay depends on how far the correct sector from current sector.
+           <blockquote><i>Average delay = Half of the rotational time of disk </i></blockquote>
+		<li><i> Transfer Time :</i> This is the time taken to pass one sector under the head and given as:
+		<blockquote> <i>Transfer Time = Rotational Time / No. of sectors per track </i></blockquote>
+     	
+ </ul>
+<dd>An Example to calculate time for read/write: <pre>
+		Consider a disk with:	
+			No. of surfaces (S) = 21
+			No. of tracks/surfaces or No. of cylinders(T) = 2627
+			No. of sectors/track (N) = 99 
+  			No. of bytes/sector (B)= 512
+			Seek time = 11 ms
+			Speed = 5400 rpm 
+		Then                   
+			Capacity of the disk = S*T*N*B = 21*2627*99*512 Bytes = 2.8 GByte
+			Average Rotational Delay  = O.5*( 60/5400) = 5.6 ms
+			Data Transfer Rate = 99*512*5400/60 Bytes/sec = 4.6 MBytes/sec
+			Transfer Time for one sector = (512/4.6) micro sec = 0.11 ms
+		
+		Hence Average time to read any sector = 11 + 5.6 + 0.11 = 16.71 ms
+</pre>
+</dl>
+<a href="#content">Back to Contents</a>
+
+<h4><a name = "topic5"></a>Block Allocation Methods</h4>
+	    
+<p> From previous example we saw that to make disk I/O faster, we will have to minimize the average cost 
+( seek time + rotaional delay + transfer time ). We have two components to achieve this:
+<ul>
+<li><i> FS Layout</i>
+<li><i> Disk Scheduling</i>
+</ul>
+In this section our main focus is on FS Layout. We will discuss about Disk Scheduling later in this course.Here first we discuss about notion of block.
+<dl>
+<dt><i> Notion Of Blocks</i>
+<dd>A <i>Block</i> is a smallest unit of allocation on disk. But since a sector is the unit of data transfer, allocation of space to files must be done in terms of sectors i.e.
+ block must be <i>atleast</i> equal to sector size. However it is more efficient to use a larger unit of disk allocation as multiple <i>contiguous</i> sectors can be read or write in a single disk transfer.
+This scheme is better only when we have large files, otherwise larger block size leads to <i>internal fragmentation.</i>
+<dd> Here are some measurements from a  file system at <i>UC Berkley :</i> 
+<pre>
+		<u>Organisation</u>				<u>Space used</u>		<u>Waste</u>
+		
+		Data Only				775.2			0%
+		+inodes,512B block			828.7			6.9%
+		+inodes,1KB block			866.5			11.8%
+		+inodes,2KB block			948.5			22.4%
+		+inodes,4KB block			1128.3			45.6%
+</pre>
+
+<dt><i> Block Allocation Methods</i>
+<dd><i> Issues :</i>
+<ul>
+<li> Access Time : Most files are accessed sequentially. So it is more efficient to allocate blocks to a file close together so that the seek time is minimum.
+<li>Keep track of the blocks allocated to a file : Given below are three methods of allocating disk space :-
+<dl>
+<dt><dd> 1.Contiguous Allocation
+<dd> 2.Linked Allocation
+<dd> 3.Indexed Allocation
+</dl>
+</ul>
+
+<dd><p><i> Contiguous Allocation</i></p>
+<p>In contiguous allocation method, each file occupies a set of contiguous blocks on the disk. Contiguous allocation of a file is defined by the <i>disk address</i> and <i>length</i> ( in block units ) of the first block. If the file is n blocks long and starts at location b, then it occupies blocks b, b+1, b+2,..., b+n-1. The directory entry for each file indicates the address of the starting block and the length of the area allocatd for this.
+
+<p align="center">
+<img border="0" src="Picture2.png" ></p>
+
+<p>One major <i>advantage </i> is that accessing a file that has been allocated contiguously is easy.The number of disk seeks required accessing contiguously allocated files is <i>minimal</i>. For sequential access, the file system remembers the disk address of the last block refrenced and, when necessary, reads the next block. For direct access to block i of a file that  starts at block b, we can immediately access block b+i. Thus, both sequential and direct access can be <i>supported</i> by contiguous allocation.</p>
+
+<p>This allocation method suffers from the problem of <i> external fragmentation </i>. As files are allocated and deleted, the free disk space is broken into little pieces. It becomes a problem when the largest continuous chunk is insufficient for a request; storage is fragmented into a number of holes, no one of which is large enough to store the data.</p>
+
+<p> Anoher problem with contiguous allocation is determining how much space is needed for a file. When a file is created, the amount of space it will need must be found and allocated. If the allocated space is too <i>little</i>, then it may be a situation that the file can not be extended. To over come this problem, we may find a larger hole and <i>copy</i> the contents of the file to the new space, and release the previous space. But this action is very time consuming. 
+If the allocated space is very <i>large</i> then it will cause <i>internal fragmentation</i>.</p>
+
+<p> Due to above mentioned problems we find that that contiguous allocation is useful only for <i> Read  Only and write once </i> file system such as iso9660 for CD-ROMs where file size is fixed and known already.</p>
+
+</p>
+
+<a href="#content">Back to Contents</a>
+<dd><p><i> Linked Allocation</i></p>
+
+<p> With linked allocation, each file is a <i>linked list</i> of disk blocks those may be scattered <i>anywhere</i> on the disk. The last four bytes of each block store the location of the next block. Thus we need to store only the first block number and size in  inode or directory entry.</p>
+
+<p> To <i>create</i> a new file, we simply create a new entry in the directory. Each directory entry has a <i>pointer</i> to the first disk block of the file. This pointer is initialized to <i>nil</i> to signify a empty file. The size field is also set to 0. To <i>read</i> a file, we simplly read blocks by following the pointers from block to block. To write to the file, a free block can be found and is then written to, and linked to the end of the file.</p>
+
+<p> There is no external fragmentation with linked allocation, and any  free block on the free-space list can be used to satisfy a request. The size of the file does not need to be declared when that file is created.  A file can continue to grow as long as free blocks are available.</p>
+
+<p align="center">
+<img border="0" src="Picture3.png" ></p>
+
+<p> The major problem with Linked allocation is <i> random access </i>. To find the <i>i</i>th block of a file, we must start at the beginning of that file, and follow the pointers until we get to the <i>i</i>th block. Each access to a pointer requires a disk read, and sometime a disk seek. These disk I/O cause huge cost, hence inefficient.</p>
+
+<p>Another  problem is the <i>space</i> required for pointers. The solution to this problem is to collect blocks into multiples, called <i>clusters</i>, and to allocate clusters rather than blocks. Pointers then use a much smaller percentage of file's disk space. This approach results into internal fragmentation.</p>
+
+<P> Another problem of linked allocation is of <i>reliability</i>. As blocks are linked together, if one block goes bad or get corrupted, th entire file will get lost.</p>
+
+</dl>
+
+<a href="#content">Back to Contents</a>
+<h4><a name = "topic6"></a>FAT File System</h4>
+
+<p> <i>File Allocation Table (FAT)</i> ia a variation of linked allocation method. A section of disk at the beginning of each partition coantain the table. The table has one entry for each disk block, and is indexed by block number. The directory entry contains the block number of the first block of the file. The table entry indexed by that block number contains the block number of the next block in the file. This chain continues until the last block, which has a special end-of-file value as the table entry. Unused blocks are indicated bya 0 table value.</p>
+
+<p>To allocate a new block to a file, find the first 0- valued table entry, and replace the previous end-of-file value with the address of the new block. The 0 is then replaced with the ene-of-file value.</p>
+
+<p align="center">
+<img border="0" src="Picture4.png"></p>
+
+<p> The FAT allocation scheme can result in a significant number of disk head seeks, unless the FAT is <i>cached</i>. The disk head has to move to the start of the partition to read the FAT and find the location of the block, then move to the location of the block itself. A <i>benefit</i> of the FAT is that random access time is improved, because the disk head can find the location of any block by reading the information in FAT.</p>
+
+
+<a href="#content">Back to Contents</a>
+
+
+</body>
+</html>

@@ -1,0 +1,548 @@
+<html>
+
+<head>
+
+<title>Lecture notes for CS330 (lecture - 11)</title>
+
+</head>
+
+<body text="#000000" link="#000000" vlink="#000000" background="..\bg3.gif">
+
+<center>
+
+<h2>
+
+Signals
+
+<p>
+
+Lecture-11<br>
+
+Operating Systems (CS330)</h2>
+
+</center>
+
+
+
+<h4>
+
+Lecturer: Deepak Gupta<br>
+
+Notes prepared by: Pankaj Maurya<br>
+
+Lecture Date: August 23, 2004 
+
+</h4>
+
+</h4>
+
+
+<!--
+	The Contents
+-->
+
+
+
+<a name= "content"></a>
+
+<h4>Contents</h4>
+
+<ul>
+
+<li><a href="#define"> What are Signals?</a>
+
+<li><a href="#use">Signals: Uses and Causes.</a>
+
+<li><a href= "#signals">Unix Signals.</a>
+
+<li><a href= "#send">Sending Signals to Processes.</a>
+
+<li><a href="#kernel">Signals: An inside view from the Kernel. </a>
+
+<li><a href="#block"> Avoiding Signal Races - Masking Signals.</a>
+
+<li><a href="#syscalls">fork and execve: effect on signal data structures.</a>
+
+<li><a href="#summary">lecture summary. </a>
+
+</ul>
+<hr>
+
+
+<!--
+	The Introduction
+-->
+
+
+
+<h4>
+About this Lecture
+</h4>
+
+<p>
+
+In this lecture, we shall see the concept of signals in details mainly in 
+reference to the Unix like Operating Systems.
+We shall also talk about the kernel
+level details in signal handling: the signal disposition, signal bit vector etc.
+We shall also see how to block signals to prevent them from interrupting 
+sensitive processing.
+Finally we shall see the effects of system calls - execve and 
+fork on the signal data structures.
+
+</p>
+<hr>
+
+<!--
+	Section:	What are signals?
+-->
+
+<a name= "define"></a>
+<h4>What are Signals?</h4>
+<p>
+Signals are an inter-process synchronization mechanism.
+They cannot communicate data but only
+the occurrence of events.
+By their nature, they interrupt whatever the process was doing when the
+signal was received,
+and force it to handle them immediately.
+They are thus a software analog of exceptions and
+interrupts (see lecture 2).
+From the point of view of the process they are sent to, they can
+be synchronous or asynchronous.
+</p>
+<p><a href="#content"> Back to Contents</a></p><hr>
+
+
+<!--
+	Section:              Signals:Uses and causes 
+-->
+
+
+
+
+<a name= "use"></a>
+<h4>Signals: Uses and Causes</h4>
+<p>
+Signals are usually used by the operating system to notify a process of
+the occurrence of some event,
+without requiring the process to poll for the event. 
+Signals can also be 
+used by a process to communicate event occurrence to another process.
+</p>
+
+<p>
+Signals can be generated due to numerous events and conditions.
+They can be grouped into:
+	<ul>    
+	<li>
+	<b><i>exception-related events</i></b><br>
+Events such as floating point error, illegal address
+access etc. result in exceptions at the hardware level, as we have seen earlier.
+In response, the exception handler of the operating system usually delivers a 
+signal to the process which caused the exception to occur.
+	<br>
+
+	<li>
+	<b><i>software conditions </i></b><br>
+Processes encounter unusual conditions that need to be taken care of,
+for example:
+		<ul>
+		<li>  a process writes to a pipe for which there are no
+			readers left.
+		<li> an alarm set by the process goes off.
+		</ul>    
+
+	<li>
+	<b><i>inter-process coordination and communication</i></b><br>
+One process notifies the other of an event or condition.
+For example:
+		<ul>
+		<li>   
+      process A has completed an activity, and notifies process B about it, e.g. so that B can use the results.
+		<li>      
+	   if process B is a child of A, B notifies A when it terminates.
+		</ul>
+
+		<li>
+		<b><i>interaction between users and processes</b></i><br>
+
+There are certain key presses that are interpreted by the system as requests to send signals to the process with which we are interacting:
+			<ul>
+    				<li>
+     Ctrl-C
+     Pressing this key causes the system to send an INT signal (SIGINT) to the 
+processes running in the foreground on the terminal.  By default, this signal
+causes a process to terminate immediately.
+    				</li>
+    
+    				<li>
+    Ctrl-Z
+    Pressing this key causes the system to send a STOP signal (SIGSTOP) to the 
+processes running in the foreground on the terminal.     By default, this signal causes the process to suspend execution. 
+    				</li>
+    
+    				<li>
+    Ctrl-\
+    Pressing this key causes the system to send a ABRT signal (SIGABRT) to the running process.     By default, this signal causes the process to immediately terminate with a core dump.
+    				</li>
+			</ul>
+  
+</ul>
+    
+		
+<p><a href="#content"> Back to Contents</a></p><hr>
+
+
+<!--
+	The Unix Signals section
+-->
+
+
+
+<a name= "signals"></a>
+<h4>Unix Signals</h4>
+<p>
+Unix defines a number of signals for various situations.
+Each signal is associated with a signal number.  The symbolic
+names for various signals are usually defined in the system header file 
+<tt>/usr/include/signal.h</tt>.
+
+A list of the common signals is shown below.
+
+<pre>
+    Signal     Default Action Description
+    ---------------------------------------------------------------------------
+    SIGINT     Terminate.     Interrupt. Generated when we enter CNTRL-C
+    SIGSTOP    Stop           Stop process
+    SIGILL     Core dump      Generated when we executed an illegal instruction
+    SIGSEGV    Core dump      Generated in case of illegal address
+    SIGFPE     Core dump      Floating Point error
+    SIGCONT    Continue       Continue if stopped
+    SIGUSR1    Terminate      User defiled signal 1
+    SIGUSR2    Terminate      User defined signal 2
+    SIGKILL    Terminate      Termination (can't catch, block, ignore)
+    SIGCHLD    Ignore         A child process has terminated or stopped    
+  
+</pre>
+
+Please see the complete list using:
+<pre>
+man 7 signal
+</pre>
+
+</p>
+<p><a href="#content"> Back to Contents</a></p><hr>
+
+
+
+<!--
+	The Signals Sending section
+-->
+
+
+<a name= "send"></a>
+<h4>Sending signals to Processes</h4>
+
+<p>
+
+This kill system call is the normal way of sending a signal from one process 
+to another.
+ <pre>
+   int kill(pid_t pid, int sig);
+ </pre>
+ 
+ Please see the details using: 
+ <pre>
+ man 2 kill
+ </pre>
+ 
+<a href="#content"> Back to Contents</a></p><hr>
+
+
+
+<!--
+	The Kernel's section
+-->
+
+
+<a name= "kernel"></a>
+<h4>Signals : The inside story from the kernel</h4>
+
+<p>
+
+For each process the kernel maintains a signal disposition,
+a blocked signals bit vector and a pending signals bit vector.
+
+
+<ul>
+
+<!--
+	Signals Disposition subsection
+-->
+
+<li><b><i>Disposition of a signal</b></i><br>
+ A signal's `disposition' is the action the process will take when it receives this signal. 
+ Each signal has a default action, which is the action to be taken if the process does not 
+ specify a disposition. A process can specify an other than the default to be 
+ taken in response to any signal sent to it.
+ The exceptions to this are SIGKILL and SIGSTOP, which cannot be caught, 
+	ignored, or blocked.
+
+ The disposition of a process for a signal can be: default, ignore (the receipt
+ of the signal is ignored), or handled.  If a process wishes to handle a
+ signal, it needs to specify the address of a function which should be called
+ when the specified signal is received by the process.
+</li>
+
+<!--
+	Signals Disposition changing subsection
+--> 
+<li><b><i>Changing the Signal disposition</b></i><br>
+The system call <b>sigaction</b> can be used for this purpose.
+<pre>
+void sigaction(int signo, const struct sigaction *action, 
+                   struct sigaction *old_action);
+</pre>
+Please see for details:
+<pre>
+     man 2 sigaction 	  
+</pre>    
+
+</li>
+
+<li><b><i>Signal Delivery</b></i><br>
+The kernel maintains for each process, a bit vector of signals
+that have been delivered to the process but not yet been handled
+by the process (pending signals).  Thus at the time of signal delivery, 
+the appropriate bit in the pending signal bit vector of the target
+process is simply set, and if the target process is sleeping, it is
+woken up.  Note that this implies that if a process
+receives another instance of a signal before handling the previous 
+instance of the same signal, it will finally see just one instance
+of the signal.  One signal instance will be `lost'.  Recall that
+this is similar to what happens in the case of interrupts.
+
+<!--
+	Signals handling subsection
+-->
+
+<li><b><i>Signal Handling</b></i><br>
+As seen, the signal delivery just marks the signal as pending in the
+pending signal bit vector of the target process.  The signal is actually
+handled when the process itself next runs on the CPU (even if the
+disposition for the signal is to terminate the process).  More precisely,
+a process just before returning from the kernel mode to the user mode
+checks whether it has any pending signals, and if yes, it handles them
+one by one.
+<p>
+Handling a signal for which the process has installed a signal handler
+is a little involved.  The kernel, in this case, must ensure that the
+process, when it returns to the user mode, starts executing the signal
+handler function, and when this function returns, the process should
+go back to the kernel, and then return again to the user mode at the
+same point where it had originally entered the kernel (before the signal
+was handled).  This return back to the kernel before resuming the
+original execution is needed because a process can request certain
+signals to be automatically <i>blocked</i>(see below) when a signal
+handler is executed, and unblocked when the signal handler finishes.
+This automatic unblocking requires the process to return to the
+kernel mode after returning from the signal handler.  The kernel achieves
+this by putting some code on the user stack, and setting the return
+address from the signal handler function to point to this code.
+This code makes a special <i>sigreturn</i> system call to return
+control to the kernel.  All this is, of course, transparent to the
+user program.
+</li>
+</ul>
+
+<p><a href="#content"> Back to Contents</a></p><hr>
+
+
+
+<!--
+	Signals Blocking section
+-->
+
+<a name= "block"></a>
+<h4>Avoiding signal races - Masking Signals.</h4>
+
+
+<p>
+<ul>
+<!--
+	The blocking need subsection
+-->
+<li><b><i>The need</b></i><br>
+
+One of the nasty problems that might occur when handling a signal, 
+is the occurrence of a 
+second signal while the signal handler function executes. Such a signal might 
+be of a different 
+type than the one being handled, or even of the same type. Thus, we should 
+take some precautions inside the signal handler function, to avoid races.  
+Temporary blocking of signals gives you a way to prevent 
+signals during critical parts of your code.
+<p>
+Signals can be blocked just like interrupts can be.  However, unlike interrupts,
+there is no relative priority defined among signals.  The kernel maintains
+a block signal bit vector for each process to keep track of the signals
+which are currently blocked by the process.  A pending signal is not handled
+by the process while it is blocked.  The <i>sigprocmask</i> system call
+can be used to block signals.
+
+<!--
+	The blocking procedure subsection
+-->
+
+<li><b><i>The procedure</b></i><br>
+
+The system call <b> sigprocmask </b> can be used to modify or examine the bitmask of blocked signals.
+
+<pre>
+int sigprocmask(int how, const sigset_t *set, sigset_t *oset); 
+</pre>  
+  
+sigprocmask() accepts 3 parameters:<br>
+<ol>
+
+<li>
+int how<br>
+    defines if we want to add signals to the current process's mask (SIG_BLOCK),
+    remove them from the current mask (SIG_UNBLOCK), 
+    or completely replace the current mask with the new mask (SIG_SETMASK). 
+    <br>
+<li>    
+const sigset_t *set<br>
+    The set of signals to be blocked, or to be added to the current mask, 
+    or removed from the current mask (depending on the 'how' parameter). 
+    <br>	
+    
+<li>
+sigset_t *oldset<br>
+    If this parameter is not NULL, then it'll contain the previous mask. 
+    We can later use this set to restore the situation back to 
+    how it was before we called sigprocmask(). 
+    <br>
+
+<br>
+sigset_t variables can be manipulated as illustrated below:
+<pre>
+/* define a new mask set */
+sigset_t mask_set;
+
+/* first clear the set (i.e. make it contain no signal numbers) */
+sigemptyset(&mask_set);
+
+/* lets add the INT signals to our mask set */
+sigaddset(&mask_set, SIGINT);
+
+/* finally, lets check if the INT signal is defined in our set */
+if (sigismember(&mask_set, SIGINT)
+    printf("signal INT is in our set\n");
+else
+    printf("signal INT is not in our set - how strange...\n");
+
+/* finally, lets make the set contain ALL signals available on our system */
+sigfillset(&mask_set)
+
+</pre>
+
+<a href="count_ctrlc.c">An example to illustrate signal masking</a> 
+</ol>
+
+
+</li>
+</ul>
+</ul>
+
+</p>
+
+<p><a href="#content"> Back to Contents</a></p><hr>
+
+
+
+<!--
+	The system call section
+-->
+
+
+<a name= "syscalls"></a>
+<h4>Effects of system calls fork and execve on signal data structures. </h4>
+
+<p>
+<ul>
+<li>
+ During fork, the set of signal actions for a process is initialized from that of its parent. 
+ 
+ The blocked signals vector, and the dispositions are inherited whereas the pending signals bit 
+ 
+ vector is cleared.
+
+<br><li>
+During exec, signal dispositions of SIG_DFL and SIG_IGN remain unchanged. 
+Signals whose 
+dispositions specify handler functions are reset to SIG_DFL, i.e., 
+the signals handled by user's 
+handlers earlier are now handled in the default manner.The process's signal 
+mask is 
+unaffected by exec, i.e., the blocked signals continue to be blocked. 
+
+</ul>
+</p>
+
+<p><a href="#content"> Back to Contents</a></p><hr>
+
+
+
+<!--
+	The lecture summary section
+-->
+
+<a name= "summary"></a>
+<h4>Lecture Summary</h4>
+
+<p>
+Signals are used to deal with asynchronous events that happen unexpectedly, at seemingly random 
+times.
+They can be caused by a variety of events or conditions, e.g. hardware-related events, 
+software conditions, interactions between processes, and between the user and processes.
+Careless use of signals can result in programs that work correctly most of the time, but may be 
+prone to malfunctioning due to race conditions or other subtle problems
+Newer versions of Unix provide mechanisms for handling signals reliably. 
+
+</p>
+
+<p><a href="#content"> Back to Contents</a></p><hr>
+
+
+<!--
+	The related links section
+-->
+
+<p>
+<h4>Related Links On Similar Topics</h4>         
+
+<ul>
+<li>
+<a href="http://web.cse.iitk.ac.in/~cs330/www03-04/notes/ipc/ppframe.htm">
+Previous year's CS330 site</a>
+
+<li>
+<a href="http://www.si.hhs.nl/~bertn/gnu_libc/libc_330.html#SEC330">
+The GNU C library - Signal Handling</a>
+
+
+<li>
+<a href="http://world.std.com/~jimf/papers/signals/signals.html">
+Unix Signals and Process groups</a>
+
+<li>
+<a href="http://www.yendor.com/programming/unix/apue/ch10.html">
+Lots of sample Code</a>
+</ul>
+
+<p><a href="#content"> Back to Contents</a></p><hr>
+</body>
+</html>
+

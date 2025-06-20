@@ -1,0 +1,242 @@
+<html>
+<head>
+<title>Lecture notes for CS330 (lecture - 8)</title>
+<!--
+	replace n above by the lecture number
+-->
+</head>
+<body text="#000000" link="#000000" vlink="#000000" background="..\bg3.gif">
+
+<center>
+<h2>
+Process Creation
+<p>
+Lecture-8<br>
+Operating Systems (CS330)</h2>
+</h2>
+</center>
+
+<h4>
+Lecturer: Deepak Gupta<br>
+Notes prepared by: Kumar Aditya<br>
+Lecture Date: August 17, 2004 
+</h4>
+
+<a name= "content"></a>
+<h4>Contents</h4>
+<ul>
+<li><a href="#creation"> Process Creation.</a>
+<li><a href="#mechanism">Mechanisms to create a Process.</a>
+<li><a href= "#fork">The fork system call</a>
+<li><a href= "#exec">The execve system call</a>
+<li><a href= "#comparison">Comparison of the two approaches.</a>
+<li><a href="#copyonwrite" >Copy on Write</a>
+<li><a href="#vfork"> The Vfork System Call.</a>
+<li><a href="#links"> Useful links.</a>
+
+</ul>
+<br><br>
+
+<a name= "creation"></a>
+<h4>
+Process Creation
+</h4>
+<p>
+An existing process can create a new process through a system call provided by the OS.
+Many operating systems (Unix in particular) have a notion of a parent-child
+relationship among processes.
+The creating process is called the parent process and the process it created 
+is called the 
+child process. The child may itself create new processes thus creating a tree 
+like structure.
+
+<a name= "mechanism"></a>
+<h4>
+Mechanisms to create a Process
+</h4>
+<p>
+There are two main mechanisms to create a process: 
+<ul>
+<li>
+The child process may simple execute another program from beginning.
+An example of this is the <i>CreateProcess</i> system call of Windows.
+The path to the file containing the program to be executed by the
+child process is specified as an argument to the system call in this
+case.
+</li>
+OR
+<li>
+The child process is the duplicate of the parent process.The address space and
+register values are copied.  This approach is taken in Unix, and the system
+call used to create a new process is the <i>fork</i> system call.  The fork
+call takes no parameters.
+</li>
+ </ul>
+</p>
+
+<a name= "fork"></a>
+<a href="#content"> Back to Contents</a>
+<h4>
+The fork() system call
+</h4>
+<p>
+When a process calls the fork system call, the kernel creates a child
+process of the parent process.  The address space of the child process,
+its saved register values, its set of open files etc., are all duplicates of
+the corresponding values of the creating (parent) process.  Since the
+saved program counter value is also copied, the child process also
+appears to return from the fork system call and starts executing the
+same program as the one being executed by the parent process from this
+state.  Thus at this point in time, both the parent and child are 
+executing the same program and are in identical state.  There is only
+one difference in the state of the two processes - the return value of
+the fork call is different in the two processes.  In the parent process,
+fork returns the process id (pid) of the child process, and in the child
+process it returns 0.  This allows the program to take different execution
+paths in the parent and child processes.  Fork returns -1 if the child
+process could not be created for some reason (lack of resources, for example).
+
+<p> Thus the typical usage of the fork call would look as below.
+<pre>
+	switch(cpid = fork())
+	{
+		case -1 :	/* ERROR */
+		
+		case 0  :	/* Child process */
+				.....
+
+		default :	/* Parent process */
+				......
+	}
+</pre>	
+<a name= "exec"></a>
+<a href="#content"> Back to Contents</a>
+<h4>
+The execve() system call
+</h4>
+Since the fork system call always makes the new process execute the same
+program as the one being executed by the parent, we need a mechanism in
+Unix to execute a new program in a process.  Unix provides the <i>execve</i>
+system call for this purpose.  The arguments for this call are:
+the path to the program file, command line arguments, and environment
+variable values.  Please see the man page of execve for more details.
+<p>
+On calling execve, (if the call succeeds) the existing virtual address
+space of the process is discarded, and the process is given a new address
+space initialized as per the new program to be executed (i.e., it will 
+contain code and initial data values specified in the executable file.
+If successful, therefore, the execve call does not return.  The process
+instead starts executing the new program from its initial state.
+<p>
+The standard C library actually contains many different wrapper functions
+for the execve system call, such as <i>execl</i>, <i>execle</i>, 
+<i>execvp</i> etc.  All these functions execute the same underlying
+system call (execve) but accept arguments in different formats so that
+the programmer can use the one most convenient to him.
+<p>
+In practice, a call is fork is almost always immediately followed
+by a call to execve in the child process.  For example, to execute
+the command ``ls'', the shell would use fork to create a child process,
+and execute the program /bin/ls in the child process using execve.
+
+<a name="comparison">
+<h4>
+Comparison of the two process creation models
+</h4>
+The glaring disadvantage of the fork/exec model for process creation
+as compared to the model where a single call is used for both purposes
+appears to be that in fork, the parent process' address space is copied
+to the child process only to be immediately discarded during execve.
+However optimizations to the naive fork implementation can reduce
+this overhead substantially.
+<p>
+The main advantage of the fork/exec model is that before handing over
+control to the new program (in the newly created process), the original
+program (the one being executed by the parent process) has a chance
+to manipulate the child process.  This is because the child process
+is executing the same program till it calls execve.  This flexibility
+is very commonly used, for example, for implementing I/O redirection
+in Unix.  We shall see how this is done in a later lecture.
+<p>
+Another advantage of the fork/exec model is that in some cases the programmer
+may want the two processes to actually execute the same program.
+This may be needed, for example, for implementing concurrent
+network servers.  This can of course be implemented using the single
+call approach as well but with the fork/exec model, the new process
+starts with a state that is a copy of the parent process state at the
+time it called fork.  This means that the parent process can easily
+pass some information about the work to be done to the child process.
+
+</p>
+<a name= "copyonwrite"></a>
+<a href="#content"> Back to Contents</a>
+<h4>
+Copy on Write
+</h4>
+<p>
+To avoid unnecessary duplication, typical fork implementations use
+a mechanism called <i>Copy on write</i>
+or <i> lazy copying</i>.
+
+<p>Here the idea is that at the time of fork, the address space of
+the parent is not physically copied to the child address space.
+Instead, the parent and child are made to share the same physical
+areas.  That is, the address translation tables for the child are
+simply duplicated from those of the parent.  However all writeable
+areas of the address space are marked read-only for both child
+and parent processes.  Now, as long as neither of the two processes
+writes any memory location (before one the processes has either
+exited or called execve), no copying is needed.  As soon as one
+of the processes tries to write to some memory location, an exception
+is generated (since all areas of memory are marked read-only).
+The exception handler recognizes that the exception has occurred
+due to marking of the memory area read-only in order to implement
+copy on write.  In this case, the exception handler makes a copy
+of the area being written to, and maps this new copy to the relevant
+part of the address space of the process that caused the exception.
+Also this part of the address space is now marked writeable again
+(in both processes) since the two processes no longer share the same
+copy of this area.
+<p>
+The result is that only that part of the address space needs to be
+copied that is actually modified by one of the two processes before
+one of the processes either exists or calls execve.
+
+<p>
+<a href="#content"> Back to Contents</a>
+<a name= "vfork"></a>
+<h4>
+The Vfork System Call
+</h4>
+Some flavours of Unix (e.g., Solaris) provide a separate process
+creation system call <i>vfork</i>.  The semantics of vfork are that
+the child and parent process actually run in the same address space
+(i.e., they share memory) till the child either exits or calls execve.
+This completely avoids the overhead of copying, and is, in general,
+more efficient than the fork call.  However the programmer needs to
+be aware that any changes made by the child process to some variable
+would be visible in the parent process as well.
+<p>
+Since the parent and child run in the same address space in this case,
+some mechanism is needed to ensure synchronization, so that, for example,
+they do not attempt to modify the same variable at about the same time
+leading to unpredictable results.  To ensure this, the parent process
+is suspended till the child process either exits or calls execve.
+<p>
+<b>Note</b>: Linux also has a vfork call but its functionality is identical
+to that of fork.
+
+<p>
+<a href="#content"> Back to Contents</a>
+<a name= "links"></a>
+
+
+<h4>Related Links On Similar Topics</h4>
+               
+<ul>
+<li><a href="http://web.cse.iitk.ac.in/~cs330/www03-04/notes/processes/ppframe.htm">Previous year's CS330 site</a></li>
+<li><a href="http://www.paulgrenyer.co.uk/articles/copy_on_write.htm">http://www.paulgrenyer.co.uk/articles/copy_on_write.htm
+<li><a href="http://www.robelle.com/library/smugbook/process.html">http://www.robelle.com/library/smugbook/process.html</a></li>
+
+</body>
+</html>

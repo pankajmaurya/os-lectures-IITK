@@ -1,0 +1,250 @@
+<html>
+<head>
+<title>Lecture notes for CS330(lecture-13)</title>
+</head>
+<body text="#000000" link="#000000" vlink="#000000" background="..\bg3.gif">
+<center>
+<h2>Thread Implementation and Process Synchronization
+<p>
+Lecture-13<br>
+Operating Systems (CS330)
+</h2>
+</center>
+<H4>
+Lecturer: Deepak Gupta<br>
+Notes prepared by: Jagdish Chandra Meena<br>
+Lecture Date: August 26, 2004
+</H4>
+
+<P><STRONG><a name="top">Lecture contents</a></STRONG></P>
+<UL>
+	<LI>
+		<a href="#api">Thread APIs</a>
+	<LI>
+		<a href="#synch">Process/Thread Synchronization</a>
+	<LI>
+		<a href="#pcp">Producer Consumer problem</a>
+	<LI>
+		<a href="#cs">Critical Sections</LI></UL>
+</A>
+<HR>
+<P><STRONG>about this lecture</STRONG></P>
+<P>
+	In this lecture, we shall briefly look at the POSIX thread API
+and the Java thread API.  After this we will start looking at synchronization
+issues when multiple threads (or processes) communicate using shared
+memory.
+<HR>
+<P><STRONG><a name="api"></a>Thread APIs</STRONG></P>
+<P>Kernel level support for threads (if any) is low level and non-standard.
+User level level libraries implement more convenient and standard APIs.
+We shall look at two popular thread APIs: the POSIX Thread API (PThreads),
+and the Java thread API.
+Examples : POSIX Thread API(Pthreads) , Java Thread API .</P>
+<P align="left"><STRONG>Pthread API</STRONG></P>
+<ul>
+<li>
+Include file - <tt>pthread.h</tt>
+<li>Linking option - <tt>-lpthread</tt>
+<li>Type <tt>pthread_t</tt> is used to denote the id of a thread.
+<li>Some Pthread Calls:
+	<ul>
+	<li> <tt>pthread_create</tt> - creates a new thread, returns the thread
+	id of the new thread.  A pointer to the function that the new thread
+	will execute is passed as one of the parameters.
+	<li><tt>pthread_exit</tt> - terminates the calling thread.  
+	<li><tt>pthread_join</tt> - wait for a specified thread to terminate.
+	<li><tt>pthread_self</tt> - return id of the calling thread
+	</ul>
+</ul>
+A link to a set of HTML describing the common PThread functions is available
+from the section of the course website.
+
+<P><STRONG>Java thread API</STRONG></P>
+<P>In Java, the class <tt>Thread</tt> represents threads. 
+We can use two method to create threads.
+
+<P>In the first method, define a class that extends the class <tt>Thread</tt>.
+Define a method <tt>run</tt> that contains the code to be executed by the 
+thread. Now create an instance of this class and call the <tt>start</tt>
+method on this object to start the thread:
+<pre>
+class MyThread extends Thread {
+    public void run() {
+        .... // code to be executed by a MyThread
+    }
+    .... // other methods etc.
+}
+....
+
+MyThread t = new MyThread();
+t.start();
+....
+</pre>
+
+The other way to create a thread is to define a class that implements the
+<tt>Runnable</tt> interface.  Create an instance of this class, and pass
+this object as parameter to the constructor of the <tt>Thread</tt> class
+to create a <tt>Thread</tt> object.  Finally, call the <tt>start</tt> method
+on this thread object:
+<pre>
+class MyRunnableImplementation implements Runnable {
+    public void run() {
+        .... // code to be executed by the thread
+    }
+}
+....
+Thread t = new Thread(new MyRunnable());
+t.start();
+</pre>
+<p>
+It is often easier to define the class implementing the
+<tt>Runnable</tt> interface as an anonymous, inner class
+of some other class.  See the Java documentation of the
+<tt>Thread</tt> class for an example.
+<p>
+Some useful methods in the Java <tt>Thread</tt> class are 
+<tt>currentThread</tt>,  and <tt>join</tt>.  Refer to the Java API
+documentation for details.
+<P><a href="#top">Back to Contents</a></P>
+<HR>
+<P><STRONG><a name="synch"></a>Process/Thread Synchronization</STRONG></P>
+We now discuss synchronization issues when multiple processes or threads
+communicate using shared memory.  Since the issues in the two cases are
+really the same, we will generally use the term <i>process</i> in this
+context to mean either a process, or a thread.
+<p>
+When multiple concurrent processes using shared memory  make
+concurrent access to the same data, inconsistencies may result.
+We illustrate the problem with the help of a very common pattern 
+of communication: the <i>the Producer Consumer problem</i>.
+<P><a href="default.html#top">Back to Contents</a></P>
+<P><STRONG><a name="pcp"></a>The Producer-Consumer Problem</STRONG></P>
+<P>In this problem, one or more <i>producer</i> processes are ``producing'' 
+data that needs to be ``consumed'' by one or more ``consumer'' processes.
+To coordinate the activity, the data items are stored in a finite size
+FIFO buffer.  This is a very common and powerful paradigm in implementing
+concurrent servers: instead of creating a process to handle every new
+request (which results in substantial process creation overhead), some
+worker processes are created apriori.  A master process receives requests
+from clients and inserts them in the buffer.  Each worker process simply
+takes a request from the buffer, processes it and replies to the client.
+
+<P>This problem illustrates some typical problems that arise in communication
+using shared memory.  Producers and consumers can run concurrently, so 
+a producer can be producing a data item while a consumer is consuming 
+some other item. The producer and consumer must be synchronized, so that the 
+consumer does not try to consume an item that has not yet been produced.
+If the buffer is empty, the consumers must wait; and if it is full, the
+producers must wait.
+<p>
+In general, there may be many producers and many consumers, but for simplicity,
+let us first consider just one of each.  A naive implementation of the
+producer and consumer code might look like the following.
+<pre>
+// Shared data
+Item Buffer[BUFSIZE];
+int in = out = count = 0;
+
+<b>Producer:</b>                         <b>Consumer</b>:
+
+Produce item;                     while (count == 0);
+while (count == BUFSIZE);         item = Buffer[out];
+Buffer[in] = item;                count--;
+count++;                          out = (out + 1) % BUFSIZE;
+in = (in + 1) % BUFSIZE;          Consume item;
+
+</pre>
+Here, the <tt>Buffer</tt> is being used as a circular array to implement
+a FIFO queue.  <tt>item</tt> is a <i>local</i> variable in each process.
+
+<P><EM>What is wrong with this implementation?</EM> 
+Suppose the producer tries to increment and the consumer tries to decrement 
+count at about the same time . The assembly code for these two statements 
+may be something like the following. 
+<pre>
+// count++;               // count--;
+P1: Load R1, count        C1: Load R1, count
+P2: Add R1, #1            C2: Sub R1, #1
+P3: Store count, R1       C3: Store count, R1
+</pre>
+Note that in the code above, <tt>R1</tt> is a machine register, and is hence
+not shared between the two processes since each process has its own logical
+set of machine registers.
+<P>Suppose the producer process starts executing first and 
+executes instruction P1 but is then context switched.
+Now the consumer starts running and executes C1, C2, C3. 
+Finally ,the producer runs again and executes P2, P3 . If the 
+initial value of <tt>count</tt> was 5, after this execution sequence, 
+it will be 6 
+(not 5 as expected). Other possible instruction interleavings may produce
+4, or 5 as the final value of <tt>count</tt>.
+Here we have a <i>race condition</i>. A Race Condition is a situation 
+where several processes are accessing the same data concurrently and the 
+result of the computation depends upon ther exact 
+order in which the instructions involved are interleaved.
+<P>
+To guard against the race condition in this example, we need to ensure that 
+only one process at a time can be manipulating the variable <tt>count</tt>. 
+To make such a guarantee ,we require some form of synchronization among the 
+processes.
+<P><a href="#top">Back to Contents</a>
+</P>
+<HR>
+<P>&nbsp;<STRONG><a name="cs"></a>Critical Sections </STRONG>
+</P>
+<P>We model the problem using the notion of <EM>Critical Sections</EM>.
+For each process, define the region of code where it accesses a shared piece 
+of data as a critical section. We must implement critical sections in such a 
+way that at any given point in time, at most one process can be executing 
+inside its critical section. For simplicity, assume that each process executes 
+code similar to the following.
+<pre>
+while (true) {
+    non critical code
+    Entry code
+    Critical section code
+    Exit code
+    non critical code
+}
+</pre>
+<P>Before entering the critical section, a process executes some entry code.
+This code is meant to coordinate with other processes that want to enter their 
+critical sections at the same time . Clearly this code should be such that if 
+multiple processes executes their entry code at about the same time, only one 
+process will decide to enter the critical section and the other processes 
+will wait. After finishing its critical section, a process excutes the exit 
+code that informs the other processes that it has come out of the critical 
+section so that other waiting process may now enter the critical section.
+
+<P>A solution to the critical section problem must the satisfy following 
+	requirements:
+<ol>
+<li>
+<i>Mutual Exclusion</i>&nbsp;&nbsp;At any point in time, at most one process 
+should be executing inside its critical section. This is clearly the most 
+basic requirement for the solution.
+<li>
+<i>Progress</i>&nbsp;&nbsp; Only processes wishing to enter their critical
+sections should participate in the decision making (as to which of these
+processes will enter the critical section now), and this decision must be made 
+in a finite amount of time.
+<li>
+<i>Bounded Wait</i>&nbsp;&nbsp; There is an upper bound on the number of times 
+that other processes are allowed to enter their critical sections after a 
+process has made a request to enter its critical section and before that 
+request is granted. 
+</ol>
+
+The progress requirement ensures that when there is a contention among 
+the processes for enteing their critical sections, the decision as to which 
+process will allowed to enter the critical section cannot be indefinitely 
+postponed, and only the contending processes can participate in the decision 
+making. This implies that if only one process want to enter its critical 
+section, it must be allowed to. The bounded wait condition
+ensures that every process gets a chance to enter the critical section, i.e.,
+there is no starvation.
+<P><a href="#top">Back to Contents</a>
+	<HR>
+</body>
+</html>

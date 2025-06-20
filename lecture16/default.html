@@ -1,0 +1,131 @@
+<html>
+<head>
+<title>Lecture notes for CS330 (lecture - 16)</title>
+<!--
+	replace n above by the lecture number
+-->
+</head>
+<body text="#000000" link="#000000" vlink="#000000" background="..\bg3.gif">
+
+<center>
+<h2>
+Implementation Of Events
+<p>
+Lecture-16<br>
+Operating Systems (CS330)
+</h2>
+</center>
+
+<h4>
+Lecturer: Deepak Gupta<br>
+Notes prepared by: Dungara R Choudhary<br>
+Lecture Date: September 09, 2004
+</h4>
+
+<h4>
+Implementation of events
+</h4>
+<p>
+In the previous lecture, we saw why we need a notion of `events': to make
+processes sleep till a certain condition is satisfied, or till a certain 
+event occurs.  In particular, we saw how semaphores could be realized
+(in a non-preemptible kernel) using events.  Using events, in that case,
+not only made the semaphore implementation correct, but also avoided
+busy waiting.  We will later see that the notion of events is commonly
+used also as a high level synchronization primitive (called a <i>condition
+variable</i>).
+<p>
+The two basic operations on an event are: <i>sleep</i> (wait for the
+event to occur), and <i>wakeup</i> (signal the occurrence of the
+event, i.e., wakeup a process waiting for the event to occur),
+There may also be a <i>wakeall</i> operation that wakes up <i>all</i>
+processes waiting on the event.
+<p>
+In the previous lecture, we used an event as an abstract type.
+But how can this type (and the operations on it) be implemented?
+Essentially, for an event we need to store the list of processes
+that are waiting for the event to occur.  Note that what actual
+hardware or software event, the event represents is not important
+in the implementation.  This list of processes is usually 
+maintained as a FIFO queue.  The <i>sleep</i> and <i>wakeup</i>
+operations manipulate this list to add and remove processes from
+this list respectively.  For this reason, events are also often
+called ``wait queues'' (for example, in the Linux kernel).
+Note that events are often signaled
+from interrupt handlers (for example, an interrupt handler may
+signal the completion of an I/O operation).  Therefore, the
+list of sleeping processes associated with an event is a critical
+data structure which must be accessed mutually exclusively.
+In a non-preemptible kernel, as we know already, this implies
+that interrupts must be disabled while accessing or modifying
+this list.  Here is a possible implementation of the <i>sleep</i>
+and <i>wakeup</i> operations for a uni-processor with a non-preemptible
+kernel.
+<pre>
+sleep(event e) {
+    disable interrupts.
+    add <i>current</i> process to wait queue of e.
+    set state of current process to <i>Sleeping</i>.
+    call schedule() to schedule another process.
+    restore interrupt level.
+}
+
+wakeup(event e) {
+    disable interrupts.
+    remove a process p from the wait queue of e (if one exists).
+    if a process p was found in the previous step, set its
+        state to <i>Runnable</i> and add it to the ready queue.
+    restore interrupt level.
+}
+</pre>
+
+Several points about the above algorithms are noteworthy.  First note
+that the <i>wakeup</i> operation does not call <tt>schedule</tt> to
+immediately switch to the woken up process.  The woken up process is
+simply made runnable (or ready to run), and will be scheduled by the
+scheduler later in the normal course of things.
+<p>
+Note also that the <i>sleep</i> and <i>wakeup</i> operations, at the
+end <i>restore</i> the interrupt level (to whatever it was when the
+function was called) instead of simply reenabling interrupts.  This
+is because the calling function may have already disabled interrupts
+for some reason when this function was called, and on return from
+this function, the calling function would expect the interrupts to
+be still disabled.  Therefore, all functions that disable interrupts
+would usually store the previous interrupt level in a local variable
+while disabling interrupts, and at the end restore the interrupt
+level to this saved value.  The kernel has functions which make this
+task easy.  For example, the function to disable interrupts usually
+returns the prior interrupt level, which can later be used as an
+argument to the function used to restore an interrupt level.
+<p>
+Note also that we need to modify the ready queue in the <i>wakeup</i>
+function.  Since the <i>wakeup</i> function can be called from
+interrupt handlers, this implies that the ready queue itself must
+be protected using interrupt disabling.  In particular, the
+<i>schedule</i> function must disable interrupts while accessing
+the ready queue.
+<p>
+Another important point about the <i>sleep</i> function above
+is that calls the scheduler (function <i>schedule</i>) with
+interrupts disabled.  Does that mean that interrupts will remain
+disabled while the process is asleep.  Clearly, this is neither
+desirable nor necessary.  The <i>schedule</i> function itself
+(while disabling interrupts, as discussed above) would store the
+current interrupt level in a local variable, and at the end
+restore the interrupt level indicated by this variable.  Note
+however, that the kernel stack changes during the context switch.
+This means that the <i>schedule</i> function restores the
+interrupt level when this (<i>schedule</i>) function was called
+by the process that is now running (after the context switch).
+When the process which has just been switched out is rescheduled,
+its interrupt level just before calling the <i>schedule</i>
+function will hence get restored.
+<p>
+In other words, the interrupt level of a process is also saved
+at the time of context switch, and is later restored when this
+process is scheduled again.
+
+<hr>
+</body>
+</html>

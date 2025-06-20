@@ -1,0 +1,184 @@
+<html>
+<head>
+<title>Lecture notes for CS330 (lecture - 6)</title>
+<!--
+	replace n above by the lecture number
+-->
+</head>
+<body text="#000000" link="#000000" vlink="#000000" background="..\bg3.gif">
+
+<center>
+<h2>
+Unnamed Pipes and I/O Redirection in Unix<p>
+Lecture-10<br>
+Operating Systems (CS330)</h2>
+</center>
+
+<h4>
+Lecturer: Deepak Gupta<br>
+Notes prepared by: Taranbir Singh<br>
+Lecture Date: August 21, 2004 
+</h4>
+</h4>
+<a name= "content"></a>
+<h4>Contents</h4>
+<ul>
+<li><a href="#unnamed" >Unnamed Pipes</a>
+<li><a href="#redirection">I/O Redirection in UNIX</a>
+</ul>
+
+<a name="unnamed"></a>
+<h4>
+Unnamed Pipes</h4>
+Pipes are a commonly used IPC mechanism in Unix.  Pipes can be
+named or unnamed.  Unnamed pipes are very commonly used, for example,
+in shell commands that `pipe' the output of one program as input to
+another program.
+<p>
+Access to unnamed pipes can be passed on to its children by the
+process that creates the pipes.  There is no other way to obtain
+access to an existing unnamed pipe.  Thus, unnamed pipes can only
+be used for communication by `related' processes.  For example,
+the processes could have a parent-child, or a sibling relationship.
+<p>
+The kernel associates a fixed size FIFO buffer with every pipe that
+is created.  Message boundaries are not preserved in this buffer, i.e.,
+the buffer is a queue of bytes rather than a queue of messages.
+There can, in general, be multiple readers and/or multiple writers
+for the same pipe.  The data written by writers is queued up in a
+FIFO manner.  Any reader always extracts some bytes from the front
+of the buffer.  Thus two readers will never get the same data.
+<p>
+Read calls to a pipe block till some data is available in the buffer.
+Note that a read request for <i>n</i> bytes will return as soon as
+even one byte is available, the return value of the read call indicates
+the actual number of bytes read. 
+Write calls only block if the buffer is full.
+<p>
+An unnamed pipe is created using the <i>pipe</i> system call.
+The argument is (a pointer to) an array a of at least 2 integers.
+If the pipe creation is successful, on return, a[0] will contain
+a file descriptor for reading the pipe, and a[1] will contain a
+file descriptor for writing to the pipe.  The return value of the
+pipe call is 0 or -1 depending on whether the pipe creation was
+successful or not.
+<p>
+Pipes are read from and written to using the usual read and write
+calls used for reading from and writing to files respectively.
+Here is an example code snippet that illustrates how a parent and
+child process can communicate using an unnamed pipe.  Note that
+the parent must first create the pipe and then fork the child process
+so that the child inherits access to the pipe file descriptors.
+<pre>
+    int r, fd[2], cpid;
+    r = pipe(fd);
+    if (r == -1) {
+        ...error...
+    }
+    switch (cpid = fork()) {
+        case -1:
+            ...error...
+        case 0:  /* child */
+            close(fd[0]); 
+            /* child does not wish to read from pipe,
+               so it closes the file descriptor for reading the pipe
+            */
+            r = write(fd[1], buffer, n);
+            ....
+        default: /* parent */
+            close(fd[1]);
+            r = read(fd[0], buffer, n);
+            ....
+    }
+    ....
+</pre>
+<a href="#content">Back To Contents.</a>
+<a name="redirection"></a>
+<h4>
+I/O Redirection in UNIX</h4>
+
+Let us see how transparent I/O redirection is implemented by a shell
+program in Unix.  When a command such as `ls -l | more' is given by
+a user to the shell, the shell creates two child processes, one to
+execute the ls program, and the other to execute the more program.
+But before it uses the execve call in the two processes, it executes
+some code in both processes to ensure that the standard output of the
+process which will execute ls is connected via a pipe to the standard
+input of the process which will execute more.  Note that both the
+ls and more programs need not be aware, in general, of this redirection;
+they just write to standard output and read from standard input
+respectively.
+<p>
+To understand how I/O redirection works, we need to understand a bit
+about file related data structures maintained by Unix.  We shall see
+details of these data structures later when we study file systems.
+<p>
+For each process, Unix maintains an ``open file descriptor table''.
+The file descriptors returned by open, pipe, etc., system calls are
+just indices into this table.  Corresponding to each valid file
+descriptor for the process, the file descriptor table entry contains
+a pointer to some kernel data structure which gives information about
+what file does this file descriptor represent, what mode is the file
+open in (read, write etc), etc.  During fork, the file descriptor table
+created for the child is a copy of the parent's file descriptor table.
+This is how the child inherits access to files etc., open in the parent
+process at the time of fork.
+<p>
+File descriptors 0, 1, 2 (by convention) always refer to the standard
+input, standard output, and standard error streams respectively.  These
+file descriptors are opened by the getty program and are therefore
+available to all processes.  Usually all these file descriptors refer
+to the terminal in which the process is running.
+<p>
+The <i>dup</i> call can be used by a process to duplicate some valid
+file descriptor to the <i>first unused entry in its open file descriptor
+table</i>.  This call is the key to implementing I/O redirection.
+To ensure that the standard output of a process refers to a given
+file descriptor (which could be for a file, pipe etc.), the process
+just needs to close file descriptor 1, and then <i>dup</i> the 
+file descriptor of interest.  Since fd 1 is the first unused fd, 
+it becomes a duplicate of the specified fd (which can now be closed).
+Similarly the standard input or standard error streams of a process
+can be redirected to files, pipes etc.
+Note that this manipulation of file descriptors is performed by the
+shell program in the child process(es) <i>before</i> calling execve.
+<p>
+Here is an example of how the shell program might carry out the
+command ``ls -l | more''.
+<pre>
+    int cpid1, cpid2, r, fd[2];
+    r = pipe(fd);
+    if (r == -1) {
+        ...error...
+    }
+    switch ((cpid1 = fork()) {
+        case -1: ... error...
+        case 0: /* child process, will execute ls */
+            close(fd[0]); /* will not read from pipe */
+            close(1); /* to dup fd[1] into fd 1 */
+            dup(fd[1]); /* now fd 1 can also be used to write to pipe */
+            close(fd[1]); /* no need for the other copy of the pipe fd */
+            execve("/bin/ls", ...);
+        default:;
+    }
+    switch ((cpid2 = fork()) {
+        case -1: ... error...
+        case 0: /* child process, will execute more */
+            close(fd[1]); /* will not write to pipe */
+            close(0); /* to dup fd[0] into fd 0 */
+            dup(fd[0]); /* now fd 0 can also be used to read from pipe */
+            close(fd[0]); /* no need for the other copy of the pipe fd */
+            execve("/usr/bin/more", ...);
+        default:;
+    }
+    /* only parent (shell) will execute this */
+    close(fd[0]);
+    close(fd[1]); /* parent will neither write to nor read from pipe */
+    /* but the descriptors must be closed <i>after</i> the children are created */
+    wait(...);
+    wait(...);
+</pre>
+
+<a href="#content">Back To Contents.</a>
+</body>
+</html>

@@ -1,0 +1,222 @@
+<html>
+<head>
+<title>Lecture notes for CS330 (lecture - 26)</title>
+<!--
+	replace n above by the lecture number
+-->
+</head>
+<body text="#000000" link="#000000" vlink="#000000" background="..\bg3.gif">
+
+<center>
+<h2>
+Memory Management: Paging
+<p>
+Lecture-26<br>
+Operating Systems (CS330)
+</p>
+</h2>
+</center>
+
+<h4>
+Lecturer: Deepak Gupta<br>
+Notes prepared by: Subhransu Maji<br>
+Lecture Date: October 5, 2004
+</h4>
+<!---table of contents---->
+<p>
+<br>
+<a name="Contents"> </a>
+</p><h4>
+Contents
+</h4>
+<ul>
+<li> <a href="#Topic1">About this Lecture </a> <br></li>
+<li> <a href="#Topic2">What is Paging? </a> <br></li>
+<li> <a href="#Topic4">Multilevel paging </a> <br></li>
+<li> <a href="#Topic5">The Translation Look-Aside Buffer(TLB) </a> <br></li>
+<li> <a href="#Topic6">Software Managed TLB </a> <br></li>
+<li> <a href="#Topic7">References </a> <br></li>
+</ul>
+
+<!---sections start here---->
+<p>
+<hr>
+<a name="Topic1"> </a>
+<h4>
+About this Lecture
+</h4>
+In this lecture we will discuss another Virtual Address translation scheme 
+called paging.  Variants of this scheme are typically used in modern processors.
+We will discuss the issues involved in storing the translation tables and the 
+techniques to speed up the translation.
+
+<p><a href="#Contents">Back to contents</a> </p>
+
+</p>
+<!------section---------->
+<p>
+<hr>
+<a name="Topic2"> </a>
+<h4>
+What is Paging?
+</h4>
+<p>
+So, far we have seen two techniques, namely Contiguous Memory Allocation and 
+Segmentation, for address translation.  The major problem that both
+these techniques suffer from is that of external fragmentation.  External
+fragmentation occurs because physical memory is allocated in variable sized
+contiguous chunks.  Paging eliminates external fragmentation by ensuring that
+requests for contiguous chunks of physical memory are always of the same size.
+<p>
+In paging, the virtual address space is divided into equal sized <i>pages</i>.
+Each accessible page is mapped to an equal sized physical memory <i>frame</i>.
+However, contiguous pages in the virtual address space need not map to
+adjacent frames in the physical memory. A <i>page table</i> keeps track of the
+mapping from virtual pages to physical frames.
+<p>
+With this scheme there is no problem of <b>external fragmentation</b> since
+all requests for contiguous physical memory are of the same size (page or
+frame size).  However, paging leads to the problem of <i>internal
+fragmentation</i>.
+Since memory is allocated in units of frames, more memory than needed may be
+allocated in some cases. For example if the frame size is 1 KB and a process
+requires 8604 bytyes of memory, it would be allocated 9 pages, i.e., 9216
+bytes of which 612 bytes are wasted due to internal fragmentation.  On an
+average, half a page of memory would be wasted per contiguous region in the
+virtual address space.  If the page size is not too large, this wastage  is
+not very significant.
+<p>
+The address translation with paging is similar to that with segmentation,
+except that page size is fixed while segments could be variable sized.  
+A virtual address is divided into two parts: the <i>page number</i> (<i>p</i>),
+and the <i>page offset</i> (<i>d</i>). The page number is used as an index into 
+a <i>page table</i>. A page table entry contains the frame number
+the corresponding frame in the physical memory.
+The frame number is combined with the page offset to obtain the physical
+memory address location as illustrated below.
+<p align="center">
+<img border="0" src="paging.png" width="474" height="316"></p>
+<p align="center">
+<i>Address translation with paging</i></p>
+<p>
+As in the case of segmentation, besides containing the physical frame
+number, each page table entry also usually contains a valid bit, and some
+protection bits.  Some more bits are present to aid demaind paging (to be
+studied later).
+<p>
+The page table for the current process is usually stored in the main memory
+itself.  A special register is used to indicate the (physical) address of the
+page table.
+<p>
+The main problem with paging is the amount of memory needed to maintain the
+page tables.  For a typical processor with 32 bit addresses, 4K page size and
+4 byte page table entries, the page table for a process would occupy 4MB of
+memory!  For most processes, this amount may actually be more than the memory
+requirement of the process.  Thus a lot of memory is being wasted just to keep
+track of the invalid pages.  The size of the page table can be reduced by
+increasing the page size but that would increase the amount of internal
+fragmentation.
+
+<p><a href="#Contents">Back to contents</a> </p>
+
+<!------section---------->
+<p>
+<hr>
+<a name="Topic4"> </a>
+<h4>
+Multilevel paging
+</h4>
+The problems of huge page tables can be solved using <i>multi-level</i> or 
+<i>hierarchical</i> paging. Commonly a two level paging scheme is employed. 
+Here a virtual address is split into three fields as follows.  The most
+significant <i>m</i> bits in the address determine the index into the first
+level page table (also called the page directory).  The entry in the first
+level page table gives the physical address of the second level page table.
+The next <i>n</i> bits in the address are used as index into this second level
+page table.  The entry in the second level page table gives the physical frame
+number.  Address translation in a two level paging scheme is illustrated in
+the figure below.
+
+<p align="center">
+<img border="0" src="translation.png" width="530" height="287"></p>
+<p align="center"><i>Address translation in a two level paging scheme.</i></p>
+
+<p>
+Valid bit and protection bits are usually present in both the first level and 
+second level page table entries.
+Note that the two level paging scheme is simlar to segmentation except that
+instead of storing segments contiguously in physical memory, the segments are
+paged; thus there is a page table (the second level page table) for each
+segment.  The two level paging scheme reduces the overall size of page tables
+for small processes since the second level page table need not exist if the
+valid bit in the corresponding first level page table entry indicates the
+entire region to be invalid.  Thus large regions of the virtual address space
+can be invalidated with very little overhead.
+<p>
+Another advantage of two level paging is that processes that share entire
+segments can share the page table for the segment as well.  This also reduces
+the memory requirements.
+
+<p><a href="#Contents">Back to contents</a> </p>
+<!------section---------->
+<p>
+<hr>
+<a name="Topic5"> </a>
+<h4>
+The Translation Look-Aside Buffer (TLB)
+</h4>
+Since page tables are usually stored in the main memory itself, each memory
+requires extra memory accesses for translating the virtual address to physical
+address.  In a two level paging scheme, two extra memory accesses are required
+for accessing the page tables at the two levels.  This means that the
+effective memory access speed is reduced by a factor of 3.  To speed up the
+translation, the hardware generally uses a fast cache to store the recently
+used translations.  This cache is called the Translation Look-Aside Buffer
+(TLB). With the TLB, the page tables in main memory are accessed only when
+there is a TLB miss; this can significantly reduce the cost of address
+translation.  The TLB and its operation are completely transparent to the
+software.  However, note that the TLB needs to be flushed or invalidated when
+a context switch is made.  The CPU usually provides special instructions to
+perform these operations.
+
+<p><a href="#Contents">Back to contents</a> </p>
+<!------section---------->
+<p>
+<hr>
+<a name="Topic6"> </a>
+<h4>
+Software Managed TLBs
+</h4>
+In this scheme the hardware is only aware of the TLB for its address 
+translation, i.e., given a virtual  address the hardware
+looks into the TLB. If the required translation entry is not found, 
+an exception is raised.  The operating system handles the exception,
+and if the page is valid, it inserts the required entry into the TLB (possibly
+evicting some other entry), and returns from the exception handler.  When the
+CPU retries translating the address, the required translation entry is found
+in the TLB and the execution proceeds as usual.  Thus the TLB miss cost is
+higher but the hardware is simpler.
+
+<p><a href="#Contents">Back to contents</a> </p>
+
+<!------section---------->
+<p>
+<hr>
+<a name="Topic7"> </a>
+<h4>
+References
+</h4>
+Here are a list of few references for this lecture.
+<ul>
+<li>Operating System Concepts, Silbertschatz, Galvin and Gagne, 6 th Edition.</li>
+<li><a href ="http://web.cse.iitk.ac.in/~cs330/www03-04/notes/vm/vm.htm">Last years website.</a></li>
+<li><a href ="http://www.vyomworld.com/gate/cs/os/10.asp">Some issues in Paging</a></li>
+<li><a href="http://www.cs.nyu.edu/courses/spring03/V22.0202-002/lecture-08.html">Link to other courses site [1]</a></li>
+<li><a href="http://williamstallings.com/Extras/OS-Notes/h9.html">Link to other courses site [2]</a></li>
+</ul>
+</p>
+<p><a href="#Contents">Back to contents</a> </p>
+<p>
+<hr>
+</body>
+</html>

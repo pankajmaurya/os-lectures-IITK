@@ -1,0 +1,157 @@
+<html>
+<head>
+<title>Lecture notes for CS330 (lecture - 38)</title>
+
+</head>
+<body text="#000000" link="#000000" vlink="#000000" background="bg3.jpg">
+
+<center>
+<h2>
+Disk Drivers
+<h2>
+Lecture-38<br>
+Operating Systems (CS330) </h2>
+</h2>
+</center>
+
+<h4>
+Lecturer: Deepak Gupta<br>
+Notes prepared by: Varun Garg<br>
+Lecture Date: November 16, 2004
+</h4>
+<H4><a name="topic 0"></a>Contents; </H4>
+<UL>
+
+  <LI><a href="#topic 1">Introduction</a>
+  <LI><a href="#topic 2"> I/O Devices</a>
+  <LI><a href="#topic 3">Device Drivers</a>
+  <LI><a href="#topic 4">Application Interface for Devices</a>  
+  <LI><a href="#topic 5">Logical Device Interface</a>
+  <LI><a href="#topic 6">Naming of Devices</a>
+    <ul>
+      <li><a href="#topic 7">Major and Minor Number</a></li>
+    </ul>
+  <LI><a href="#topic 8">Some generic functions of device drivers </a>
+  <LI><a href="#topic 9">References 
+  </a></LI>
+</UL>
+<HR>
+
+<h4><a name="topic 1"></a>Introduction</h4>
+
+<p>The role of the operating system in computer I/O is to manage and control I/O operations and I/O devices. Controlling all the various devices connected to the computer is a major problem for the operating system. There are various devices, with different interfaces, and various characteristics, and the operating system somehow needs to figure out how to control each one, despite all the differences.
+In this lecture, we will study the I/O subsystem of an operating system, i.e., the pieces of code that interact directly with I/O devices.
+<p>
+<a href="#topic 0">Back to contents</a><HR>
+
+<h4><a name="topic 2"></a>I/O Devices</h4>
+<p>  A typical computer has a wide variety of I/O devices that vary in various ways. These can be classified on the various bases:<br>
+  <br>
+  <em>Character v/s Block Oriented I/O Devices</em> <br>
+This is classified on the basis of whether the I/O from device is character/block oriented. Block oriented I/O devices include disk drives while typical example of character oriented I/O devices will be keyboard/mouse. <br>
+  <br>
+  <em>Polled v/s Interrupt driven I/O Devices</em><br>
+  The polled I/O devices interrupts the processor whenever they are ready while for the polled I/O devices the processor loops continually asking the device to check if its ready or not. <br>
+  <br>
+  <em>Memory mapped v/s I/O mapped I/O Devices</em> <br>
+Memory mapped I/O devices are addressed at certain reserved address ranges on the main memory bus and can be accessed using these (example video cards and other cards with on-board memory) while I/O mapped I/O devices uses special instructions, IN and OUT, to move data between the CPU and peripheral devices.<br>
+<br>
+  Operating system needs a module to interact with the device and each device has its own protocol for interaction with the software. Even similar devices manufactured by different vendors often have different protocols so operating system needs to understand these protocols in order to interact with the devices.</p>
+<p>
+<a href="#topic 0">Back to contents</a><HR>
+<h4><a name="topic 3"></a>Device Drivers</h4>
+<p>For each kind of device, a software module is required that understands and implements the interface specific to the device. These modules are part of the kernel and are called device drivers. I/O system calls encapsulate device behaviors in generic classes (device independence requires this). A device driver hides the hardware level details of using a device from the rest of the kernel and from applications, by providing a generic high level interface for using the device. Device driver can be thought of as a manual that gives the operating system instructions on how to use a particular piece of hardware.<br>
+  Device driver is different from a device controller as device driver is a software module on OS side and device controller is a hardware on the device side.<br>
+  <br>
+   <center><img src="device%20driver.JPG" width="295" height="235"></center>
+</p>
+<p> <a href="#topic 0">Back to contents</a></p>
+<HR>
+
+<h4><a name="topic 4"></a>Application Interface for Devices</h4>
+<p>For some devices, the OS provides a very high level, abstract interface to the applications (for example, the file system as an abstraction of the disk). Other devices (such as mouse, keyboard, display, etc.) have no corresponding abstraction. For such devices, the kernel exposes the &quot;logical device interface&quot; provided by the device driver to the applications. Even for devices which have a corresponding high level abstraction (such as the disk), it is usually necessary to let some applications access the logical device interface. For example, the fsck program in Unix needs to access the disk at a sector level, bypassing the file system abstraction (program reads raw blocks of disk).<br>
+  <br>
+Common levels of abstraction for device drivers are: </p>
+ <ul>
+   <li>On the hardware side:
+       <ul>
+         <li>Interfacing directly
+         <li>Using some higher-level interface (e.g. Video BIOS)
+         <li>Using another lower-level device driver (e.g. file system drivers using disk drivers)
+         <li>Simulating work with hardware, while doing something entirely different </li>
+       </ul>
+   <li>On the software side:
+       <ul>
+         <li>Allowing the operating system direct access to hardware resources
+         <li>Implementing only primitives
+         <li>Implementing an interface for non-driver software (e.g. TWAIN)
+         <li>Implementing a language, sometimes quite high-level, e.g. PostScript</li>
+       </ul>
+   </li>
+ </ul>
+<p>
+<a href="#topic 0">Back to contents</a><HR>
+
+<h4><a name="topic 5"></a>Logical Device Interface</h4>
+<p>The application interface for the accessing devices is usually similar to that for accessing files.
+  Thus the open, read, write, close, etc. system calls in Unix can be used for devices also.<br>
+Additionally, the<em> ioctl</em> (I/O control) call is used to get and modify device behaviour.<br>
+<center>
+  <strong>ioctl </strong>( <em>int </em><em>d </em>, <em>unsigned </em><em>long </em><em>request </em>, <em>char </em><em>*argp </em>)<br></center>
+where <em>d </em>  is an open file descriptor, <em>request </em> has encoded in it whether the argument is an <em>in </em> parameter or <em>out </em> parameter and the size of the argument <em>argp </em> in bytes. On success zero is returned.<br> 
+It can be used to<br>
+- modify hardware properties of the device. For example, the line speed in case of a serial terminal.<br>
+- modify device driver behaviour. For example, whether the input from a terminal is <em>cooked</em> or given <em>raw</em> to the application Raw data implies that some application may require characters as for them a key press may mean something else while example for cooked data will be pressing ctrl and c which will imply sending in an interrupt to considered devices of the terminal.</p>
+<p> <a href="#topic 0">Back to contents</a>
+<HR>
+<h4><a name="topic 6"></a>Naming of Devices</h4>
+<p>In DOS and Windows, special file names refer to specific devices. For example, COM1 always refer to the first serial port.<br>
+  In Unix, devices are represented by special files in the file system. These files have inodes and directory entries but no data blocks.
+The file type in the inode these device files is either b (block special device file) or c (character special device file).<br>
+<br>
+  In Unix, by convention, all the device special files reside in the /dev directory. Note that this is just a convention, and is not mandated by the kernel. The device files can be created any where in the file system, and can be used by applications that know their locations.<br>
+  <br>
+  crw-rw---- 1 root&nbsp;&nbsp;&nbsp; uucp&nbsp;&nbsp;   5, 64&nbsp; Apr 14 2004 cua0<br>
+  crw-rw---- 1 root&nbsp;&nbsp;&nbsp; uucp&nbsp;&nbsp;   5, 65&nbsp; Apr 14 2004 cua1<br>
+  brw-rw---- 1 varun&nbsp; floppy 2,&nbsp; 0&nbsp; Apr 14 2004 fd0<br>
+  brw-rw---- 1 root&nbsp;&nbsp;&nbsp; disk&nbsp;&nbsp;&nbsp; 3,&nbsp;&nbsp; 0&nbsp; Apr 14 2004 had<br>
+  brw-rw---- 1 root&nbsp;&nbsp;&nbsp; disk&nbsp;&nbsp;&nbsp; 3,&nbsp;&nbsp; 1&nbsp; Apr 14 2004 hda1<br>
+  crw-rw---- 1 root&nbsp;&nbsp;&nbsp; root&nbsp; 10,&nbsp;&nbsp; 0&nbsp; Apr 14 2004 logimouse<br>
+  crw-------&nbsp; 1 varun&nbsp; root 195,&nbsp; 0&nbsp; Sep 12 2004 nvidia0
+<h4><a name="topic 7"></a>Major and Minor Number</h4>
+<p>Now we must also be able to identify which device we are talking about. For this we have two identity levels:<br>
+1. what kind of a device.<br>
+2. which of the kind of device.<br>
+  For a device special file, the inode also stores the major number and minor number for the device.<br>
+  The <em>major number</em> is used to redirect a read, write etc., call to the appropriate driver in the kernel. Thus, it specifies the type of the device.<br>
+  The <em>minor number</em> identifies a specific device of the particular type.<br>
+  The <em>mknod</em> system call is used to create a device special file. Permissions for device files work just as for regular files.
+  <br>
+  <center><strong>int mknod</strong>( <em>const char *path</em>, <em>mode_t mode</em>, <em>dev_t dev</em>)<br></center>
+This creates a new file named by the path name pointed to by <em>path </em>. The mode of the new file is specified by the <em>mode </em> argument (can be character/block special or named pipes, type <em>p</em>). 
+
+
+The device identification number is of type  <em>dev_t</em> (here the major and minor number are embedded in). This function returns zero on successful completion of the command. 
+<p>
+<a href="#topic 0">Back to contents</a><HR>
+
+<h4><a name="topic 8"></a>Some generic functions of device drivers </h4>
+<UL>
+<li><p><em>Transforming I/O requests to hardware operations</em>: has to transform highlevel I/O requests into device specific sequence of instructions. 
+<li><em>Handling device interrupts</em>: This is optional given to the condition whether or not the device interrupt driver has been implemented under device driver.<br>
+<li><em>Request Scheduling</em>: This depends on the kind of device. It is important for disk driven devices as then it may or may not want to do I/O in first come first server order to reduce the seek time. Also can reduce the waiting time and hence improve overall system performance.<br>
+<li><em>Buffering</em>: Device driver buffers data by giving it to the device or on the write side. For example, in case of a serial terminal it keeps buffering until there is a new line while in case of a disk write it may buffer until two adjacent blocks to write.<br>
+<li><em>Caching</em>: Device drivers may cache data from recently accessed blocks. For example in case of a keyboard there is no caching.<br>
+<li><em>Spooling</em>: For some device it is possible that they may not accept interleaved data stream (example will be a printer). This implies that even though many applications may want an access to this device it can serve only one. So device driver spools all such applications' output and queues them to the corresponding device one at a time. </li>
+</UL>
+<p> <a href="#topic 0">Back to contents</a>
+<HR>
+<h4><p><a name="topic 9"></a>References</p></h4>
+<p><a href="http://web.cse.iitk.ac.in/%7Ecs330/www03-04/notes/devicedrivers/devicedrivers.htm">last years course notes</a><a href="http://www.cs.nyu.edu/courses/spring03/V22.0202-002/lecture-13.html"><br>
+  http://www.cs.nyu.edu/courses/spring03/V22.0202-002/lecture-13.html</a><br>
+  <a href="http://webster.cs.ucr.edu/AoA/Windows/HTML/IOa5.html">http://webster.cs.ucr.edu/AoA/Windows/HTML/IOa5.html</a><br>
+  <a href="http://en.wikipedia.org/wiki/Device_driver">http://en.wikipedia.org/wiki/Device_driver</a><br>
+  <a href="http://www.cs.auckland.ac.nz/compsci340s2c/lectures/lecture32.pdf">http://www.cs.auckland.ac.nz/compsci340s2c/lectures/lecture32.pdf</a></p>
+<p><a href="#topic 0">Back to contents</a></p>
+</body>
+</html>

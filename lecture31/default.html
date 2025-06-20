@@ -1,0 +1,318 @@
+<html>
+<head>
+<title>Lecture notes for CS330 (lecture - 31)</title>
+<meta http-equiv="Content-Type" content="text/html; charset=iso-8859-1">
+<style type="text/css">
+body {
+	background-image: url(images/bg3.gif);
+}
+</style>
+</head>
+<body text="#000000" link="#000000" vlink="#000000" background="..\b3.gif">
+
+<center>
+<h2>
+Dynamic Linking<br>
+Lecture-31<br>
+Operating Systems (CS330)</h2>
+</center>
+
+<h4>
+Lecturer: Deepak Gupta<br>
+Notes prepared by: Nikhil Aggarwal <br>
+Lecture Date: October 26, 2004</h4>
+<A name = "topic0"></A>
+<h4>Contents </h4>
+<ul>
+  <li><a href="#topic1">Introduction</a></li>
+  <li><a href="#topic2">What is dynamic linking? </a></li>
+  <li><a href="#topic3">Advantages and disadvantages of dynamic linking </a></li>
+  <li><a href="#topic4">How dynamic linking works? </a></li>
+  <li><a href="#topic5">Dynamic Relocation </a></li>
+  <li><a href="#topic6">Global Offset Table (GOT) and Procedure Linkage Table
+  (PLT)</a></li>
+  <li><a href="#topic8">Position Independent Code </a></li> 
+  <li><a href="#topic9">References </a></li>
+</ul>
+<p><hr></p>
+<A name = "topic1"></A>
+<h4>Introduction </h4>
+<p align="justify">In the last lecture, we discussed about  static linking, program loading and relocation. In this lecture, we will discuss about  dynamic linking - its need and  working. We will also study about position independent code.</p>
+<a href="#topic0">Back to contents</a><br>
+<p><hr></p>
+
+<A name = "topic2"></A>
+<h4>What is Dynamic Linking?</h4>
+<p align="justify">In dynamic linking, the library code is not a part of the binary image of the program (unlike in static linking) but is rather linked at runtime. Dynamic linking thus defers the linking process until a program starts running. The program contains information about the libraries to be linked and the dynamic linker uses this information  to load and link the libraries at runtime. We will see how the whole mechanism works in a short while. </p>
+<a href="#topic0">Back to contents</a><br><p><hr></p>
+
+<A name = "topic3"></A>
+<h4>Advantages and disadvantages of  dynamic linking</h4>
+<p align="justify">There are many advantages that dynamic linking has over 
+static linking. First, the binary files  are much smaller because no library 
+code has to be linked with the program at the time of compilation. 
+As an example, with static linking, this program 
+<a href="files\hello.c">hello.c</a> generated an executable file of size 
+2.08 MB on a Linux system, but with  dynamic linking, the executable generated 
+was only 8.45 KB in size. Secondly, with dynamic linking, a program does not
+have to be relinked to use a newer version of the library.
+Thirdly, dynamic linking permits a program to load and unload routines at 
+runtine, a facility that results in better management of the physical memory 
+and can otherwise be very difficult to provide. Finally the code of dynamically
+linked libraries in physical memory can be shared by all processes that are
+running programs that use the library.  This can result in a huge saving in
+memory requirements.
+<p align="justify">However, there are a few disadvantages as well. Firstly, 
+the runtime performance costs of dynamic linking are substantial compared to 
+those of static linking, since a large part of the linking process has to be 
+redone every time the program runs.
+Another problem is that since dynamic shared libraries are so easy to update 
+compared to static libraries, it is easy to change libraries that are in use 
+by existing programs, which means that the behavior of these programs may change
+even though ``nothing has changed''. Most programs ship with copies of all of 
+the libraries they use, and installers often inadvertently install an older 
+version of a shared library on top of a newer one, breaking programs that are 
+expecting features found in the newer one. Well-behaved applications ideally 
+pop up a warning before installing an older library over a newer one, but even 
+so programs that depend on semantics of older libraries have been known to 
+break when newer versions replace the older ones. </p>
+<a href="#topic0">Back to contents</a><br>
+<p><hr></p>
+
+<A name = "topic4"></A>
+<h4>How dynamic linking works?</h4>
+<p align="justify">As is evident, there should be a program (dynamic linker) 
+to dynamically load and link the dynamic libraries. The simplest way is to 
+statically link this dynamic linker with the program although this is not done 
+in practice. In UNIX, &quot;ld.so&quot; is the dynamic linker. The entry point 
+of the program execution is the start function which passes control to the 
+dynamic linker. The dynamic linker loads and links the required libraries and 
+then calls the &quot;main&quot; function of the program to allow the program
+to start its execution.</p>
+<p align="justify">The <i>mmap</i> system call is used to dynamically 
+load the code and data of a library into the address space of the process. 
+The <i>mmap</i> system call maps a file or its part into the address space of 
+the calling process. On calling <i>mmap</i>, the kernel finds some unused hole 
+in the address space of the process and maps the specified file contents there.
+The prototype for the <i>mmap</i> call is as follows.
+<blockquote>
+<code>
+void * mmap(void *start, size_t length, int prot, int flags, int fd, off_t offset)
+</code>
+</blockquote>
+The arguments are:
+<dl>
+<dt>
+<code>fd</code> 
+<dd>The file descriptor of the file (or other object) to be mapped.
+<dt>
+<code>start</code> 
+<dd>The preferable address in the address space of the process where the file 
+or its part should be mapped. This is usually specified as 0. Please note that 
+this is just the preferable location and not the memory location where the 
+file is actually mapped. The actual location in the memory where the file is 
+mapped is in fact returned by mmap.
+<dt><code>length</code> 
+<dd>The number of bytes to be mapped.
+<dt><code>prot</code> 
+<dd>This arguement describes the desired memory protection and must not conflict
+with the open mode of the file specified by the file descriptor. It has the
+following bits.
+            <ul>
+              <li><code>PROT_EXEC</code> - Pages may be executed.</li>
+                <li><code>PROT_READ</code> - Pages may be read.</li>
+                <li><code>PROT_WRITE</code> - Pages may be written.</li>
+                <li><code>PROT_NONE</code> - Pages may not be accessed.</li>
+            </ul>
+<dt><code>flags</code> 
+<dd>It specifies the mapping type, mapping options and whether  modifications 
+made to the mapped copy of the page are private to the process or are to be 
+shared with other processes. It has the following bits.
+            <ul>
+              <li> <code>MAP_FIXED</code> - It indicates  not to select a 
+			  different address than the one specified by <code>start</code>. 
+			  If the specified address cannot be used, the call to mmap will 
+			  fail. If this flag is specified, start must be a multiple of the 
+			  pagesize. Use of this option is however discouraged.
+              <li><code>MAP_SHARED</code> - Share this mapping with all other 
+			  processes that map this object. Making changes in the region is 
+			  equivalent to writing to the file.  So, changes made in the file 
+			  will be visible to all the other processes using this file.
+              <li><code>MAP_PRIVATE</code> - Create a private copy-on-write 
+			  mapping. Changes to the region do not affect the original file 
+			  and are thus not visible to the other processes using this file.
+            </ul>
+            Exactly one of <code>MAP_SHARED</code> and <code>MAP_PRIVATE</code> must be specified.
+<dt><code>offset</code> 
+<dd>The offset in the file starting at which the <code>length</code> number of 
+bytes will be mapped to the address space.
+</dl>
+<code>mmap</code> returns the pointer to the mapped area on success. On error, 
+-1 is returned.
+<p align="justify">For more information on <code>mmap</code>, please refer 
+to the man pages.</p>
+<a href="#topic0">Back to contents</a><br><p><hr></p>
+
+<A name = "topic5"></A>
+<h4>Dynamic Relocation</h4>
+<p align="justify">  When the library source code files are compiled, there 
+are places  in the  code where relocations need to be done. Suppose, in some 
+library (say libx.so),  some function f() calls a function g()  which, in 
+general, may  be a part of either the same library or some other library. 
+Now, the operant of the call instruction needs to be relocated by the linker 
+at the time of linking. As we have already seen, if this library is statically 
+linked with the program, these relocations can be done at the linking time 
+because the linker knows  in advance where the library code and data will be 
+loaded in the (virtual) address space of the process.  But it is easy to see 
+that this is not the case with dynamic linking. Here the (static) linker 
+does not know in advance the address at which the library code will be loaded. 
+In fact, for different programs, the library code and data may get mapped at
+different addresses.  So, in the library code, the relocations will have to be 
+done at runtime by the dynamic linker. The dynamic linker will have to read 
+the relocation tables in the library file (called the dynamic relocation 
+tables) and do the relocations accordingly. This would require the  library 
+code  to be writeable in memory and as a consequence, there will have to be as 
+many copies of library code in the physical memory as are the number of 
+processes using the library.  Thus the library code needs to be mapped with
+the MAP_PRIVATE option.  We will see later that if the code in the library is
+position independent, this runtime relocation is not needed.
+<p>
+The other problem is that of relocation of references to symbols defined in a
+library from the user program.  In this case, the static linker <i>can</i> 
+determine the address at which the library will be loaded.  However, it does
+not rely on this information since if the library changes, this information
+may become incorrect.  However, for efficiency reasons, we do not wish to
+perform dynamic relocations in the user program itself.  Consider the example
+shown in the following figure where the main program calls a function f
+defined in a dynamically linked library.  At static linking time, the address
+of the function f is not known, and yet we do not wish to relocate this
+reference at runtime.  The solution to this problem is to use a 
+PLT (Procedure Linkage Table) and a GOT (Global Offset Table) in the program.
+<p align="center"><img src="images\img1.jpg" width="283" height="237">
+<p>
+<a href="#topic0">Back to contents</a><br><p><hr></p>
+
+<A name = "topic6"></A>
+<h4>Global Offset Table (GOT) and Procedure Linkage Table (PLT)</h4>
+<p align="justify">The Global Offset Table is a data table which contains the 
+actual addresses of library symbols used from the program.  The Procedure
+Linkage Table contains a small piece of code for each library function called
+from the program.  At static linking time, the call to a library function from
+the program is relocated such that the target address of the call instruction
+is the address of the PLT entry in the program for the function.  Thus when
+the program calls this function, the control actually reaches the code in the
+corresponding PLT entry.  This code jumps to the actual location of the called
+function using an indirect call instruction.  The target address for the call
+is obtained from the GOT entry for the function.  The entries in the GOT are
+initialized at dynamic linking time by the dynamic linker.  This scheme has
+the advantage that only one GOT entry needs to be filled in for each
+library function called from the program irrespective of the number of call
+sites for the function.
+<p align="justify">
+The PLT code usually implements <i>lazy binding</i>.
+In lazy binding, the actual address of the routine is resolved only when the 
+routine is called for the first time. After that, the PLT entry jumps directly 
+to the actual address, so after the first call, the cost of using the PLT is a 
+single extra indirect jump at a procedure call. 
+<a href="files\lazy.html">Here</a> is a cutout from a reference having a more 
+detailed description of how the lazy binding exactly works.
+<p>
+For each library variable referenced from the program, space is created in the 
+executable itself. References to the variable from the program refer to this 
+address. The advantage of allocating space for library variables in the 
+executable itself is that the program code does not need to be relocated at 
+run-time, even if the library code subsequently changes. Only the code of 
+libraries needs to be relocated at run-time.
+<p align="justify">But still the code of library  needs to be relocated, and 
+thus, we  require as many copies of library code in the physical memory as are 
+the number of processes using the shared library. Consider the following case 
+as an example.
+<p align="center"><img src="images\img4.jpg" width="699" height="233"><br>
+</p>
+<p align="justify">In this example, run time relocation will have to be done 
+in the code of &quot;library 1&quot; for symbol ADD_PLT_G. Most programs use 
+the commonly available libraries such as the standard C library. It would 
+obviously be efficient if these processes could share the library code in 
+physical memory. However, in the above scheme, since the library code needs to 
+be relocated at runtime, this is not possible. The solution is to have 
+libraries that do not require relocation. The code for such libraries needs to 
+be position independent (called Position Independent Code (PIC)). </p>
+<a href="#topic0">Back to contents</a><br><p><hr></p>
+
+<A name = "topic8"></A>
+<h4>Position Independent Code (PIC)</h4>
+<p align="justify">Position independent code does not require relocation as it 
+is able to determine its address at runtime. For this, the comiler must 
+generate code differently so that runtime address determination is used. 
+Using this technique, the addresses of their PLT and GOT can be determined by 
+libraries at runtime. The code of these libraries can thus be shared by all 
+processes using them as there remains no need of having multiple copies of the 
+same. This results in a very substantial saving in physical memory 
+requirements. Let us consider an example to see how position independent code 
+works.</p>
+<p align="center"><img src="images\img5.jpg" width="699" height="349"><br>
+Fig. 5</p>
+<p>Here is the description of what is happening in the above example:</p>
+<table width="100%"  border="0">
+  <tr>
+    <td valign = "top">f: </td>
+    <td>	<p>....<br>
+      ....<br>
+      call relative(4) <br>
+    </p>
+	</td>
+    <td>
+	....<br>
+    ....<br>
+    // relative call. It pushes the address of &quot;next&quot; instruction on the stack
+	and jumps to the next instruction </td>
+  </tr>
+  <tr>
+    <td valign = "top">NEXT:</td>
+    <td>
+	pop R1<br>
+    call R1(DIFF)	</td>
+    <td>
+	// now R1 contains the address of this instruction <br>
+    // DIFF is the offset of function g() from the instruction &quot;pop R1&quot;	</td>
+  </tr>
+  <tr>
+    <td valign = "top">......</td>
+    <td>......</td>
+    <td>......</td>
+  </tr>
+  <tr>
+    <td valign = "top">......</td>
+    <td>......</td>
+    <td>// After DIFF bytes from NEXT </td>
+  </tr>
+  <tr>
+    <td valign = "top">g:</td>
+    <td>....</td>
+    <td>// implementation of g starts here </td>
+  </tr>
+</table>
+<p align="justify">The code in function f() automatically computes its address 
+at runtime and, knowing the offset to function g(), calls the function g().
+</p>
+<p align="justify">So, when a PLT entry for an external function is created, 
+its offsets from the calling instructions are computed and are filled in at 
+the appropriate places in the (compiler) generated position independent code. 
+As a real example, <a href="files\hello.c">here</a> is the hello.c program and 
+<a href="files\hello.s">here</a> is the compiler 
+(gcc -O -fPIC -S -o hello.s hello.c) generated position independent code for 
+the same. </p>
+<a href="#topic0">Back to contents</a><p><hr></p>
+
+<A name = "topic9"></A>
+<h4>References</h4>
+<ul>
+  <li><a href="http://encyclopedia.thefreedictionary.com/">http://encyclopedia.thefreedictionary.com</a></li>
+  <li><a href="http://www.iecc.com/linker/linker10.html">http://www.iecc.com/linker/linker10.html</a></li>
+  <li> <a href="http://web.cse.iitk.ac.in/%7Ecs330/www03-04/notes/linking/linking.htm">Previous year's CS330 site </a></li>
+  <li><a href="http://www.mail-archive.com/linux-gcc@vger.rutgers.edu/index.html#00825">Position Independent Code </a> </li>
+</ul>
+<a href="#topic0">Back to contents</a><br>
+
+</body>
+</html>

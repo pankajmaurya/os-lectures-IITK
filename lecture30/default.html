@@ -1,0 +1,314 @@
+<html>
+<head>
+<title>Lecture notes for CS330 (lecture - 30)</title>
+<!--
+	replace n above by the lecture number
+-->
+</head>
+<body text="#000000" link="#000000" vlink="#000000" background="..\bg3.gif">
+
+<center>
+<h2>
+Program Linking and Loading
+<p>
+Lecture-30<br>
+Operating Systems (CS330)
+</h2>
+</center>
+
+<h4>
+Lecturer: Deepak Gupta<br>
+Notes prepared by: Prateek Jain<br>
+Lecture Date: October 12, 2004
+</h4>
+<p>
+<br> 
+  <a name = "Contents"> </a>
+<h4>
+Contents
+</h4>
+<ul>
+<li> <a href = "#Topic1">About This Lecture </a> <br>
+<li> <a href = "#Topic2">From source to execution</a> <br>
+<li> <a href = "#Topic3">Executable Files</a> <br>
+<li> <a href = "#Topic4">Loading the file into memory</a> <br>
+<li> <a href = "#Topic5">Object files</a> <br>
+<li> <a href = "#Topic6">Relocation</a> <br>
+<li> <a href = "#Topic7">Statically Linked Libraries</a> <br>
+<li> <a href = "#Topic8">References</a> <br>
+
+</ul>
+
+<p>
+<hr>
+<a name = "Topic1"> </a>
+<h3>About this lecture</h3>
+</h3>
+In this lecture we will study the process of linking the object files into an 
+executable, loading the program into memory and its execution. We will also 
+study how static and dynamically linked libraries work.
+<p>
+<a href = "#Contents">Back To Contents </a>
+<p>
+<hr>
+<a name = "Topic2"> </a>
+<h3>
+From source to execution
+</h3>
+Compilers and assemblers create object files containing the generated binary 
+code and data for a source file.  The linker combines multiple object files 
+into an executable file, and the loaders (typically part of the loading
+happens in the kernel and part at the user level)
+load the executable into memory. The following diagram illustrates the process 
+of execution of a program. We will discuss the components
+of this process in detail in this lecture.
+<p>
+<center>
+ <img src="process.bmp" width="300" height="400" >
+ </center>
+<p>
+<a href = "#Contents">Back To Contents </a>
+
+
+<hr>
+<a name = "Topic3"> </a>
+<h3>
+Standard formats for executable files
+</h3>
+The kernel requires the executable files to be in a certain recognizable 
+format for execution.  Following are some formats of executable files commonly 
+used.
+<ul>
+<li><B>COFF (Common Object File Format)</B> is an object file format that was 
+introduced in Unix System V Release 3.  Nachos OS uses this format due to its 
+simplicity.
+<li><B>ELF (Executable and Linkable Format)</B> is the standard format used by 
+most operating systems today. 
+An ELF file begins with an ELF header, followed by some program headers, the
+actual code and data sections of the executable, and some section headers at
+the end as shown in the figure below.
+ We will shortly discuss some details of these elements.
+<p>
+<center>
+ <img src="elf.gif" >
+ <br>
+ The ELF format
+ </center>
+
+	<B>File Header: </B>
+		The file header contains the following information
+		<ul>
+		<li><i>type</i> of the object file 
+		(relocatable, executable, shared, core), its target architecture, 
+			and the version of ELF it is using.
+		<li>No. of <i>program headers</i> and <i>section headers</i> and their
+		location in file (offset).
+		<li><i>Entry point:</i> Code address where execution should begin for 
+		this program. This is a virtual address and not an offset.
+		</ul>
+	
+	<p>
+
+	<B>Program Header Table: </B>
+		The program header table is an array of entries which describe actual 
+		areas of file to be loaded in the memory to create an executable 
+		process image. The size of an entry in the table and the number of 
+		entries in the table are given in the ELF header.
+		Each entry in the program header table contains the type, file offset, 
+		virtual address, file size, memory image size, and alignment for a 
+		loadable area of the program.
+	<p>
+	<B>Sections: </B>
+		There are a number of types of sections described by entries in the 
+		section header table.  Sections can hold  the following:
+		<ul>
+			<li>executable code
+			<li>data
+			<li>bss: uninitialized globals and static locals
+			<li>rodata: read only initialized data
+			<li>dynamic linking information, symbol tables,	relocation information etc.
+		</ul>
+		Note that the loadable areas of the executable (as described by the
+		program headers) are actually just some sections.  However, not all
+		sections need to be loaded in the memory, for example, the debugging
+		information (if present) is not loaded into memory.
+	
+	<p>
+	<B>Section Header table: </B>The section header table contains a section
+	header  for every section in the file.
+	A section header provides the following information about the 
+	corresponding section:
+	<ul>
+	<li>name
+	<li>type of section (code/data/bss...)
+	<li>size of section in bytes
+	<li>virtual address(starting address of the memory image)
+	<li>file offset
+	</ul>
+</ul>
+<a href = "#Contents">Back To Contents </a>
+
+</p>
+<hr><!-------------------------------->
+<p>
+<a name = "Topic4"> </a>
+<h3>
+Loading the file into memory
+</h3>
+<p>
+The kernel does the following for loading the file into the memory
+<ul>
+	<li><i>Validity Checks: </i> The kernel checks that the file format, 
+	architecture etc. for the file are valid.
+	<li>looks at the program headers and determines the virtual address space
+	layout for the process code and data.
+	<li>creates address space and page tables for the process.
+	<li>allocates stack pages for the program and initializes the stack.  The
+	command line arguments and environment variable values are pushed at the
+	bottom of the stack.
+	<li>initializes saved register values for the process.  The saved PC value
+	is initialized to the entry point address specified in the file header.
+</ul>
+<p>
+An important question to consider in the process of loading is ``<i>how many 
+pages of stack should be given to the process?</i>"
+This question is difficult to answer since it depends on the program. 
+Typically, therefore, the process starts out with just one or two pages of
+stack and the stack is grown on demand.  When the process runs out of stack,
+it generates a page fault.  The page fault handler determines that the fault
+is because the program needs more stack space.  In this case, another page of
+stack is given to the process. Generally, in the address space of the process,
+there is an inaccessible hole between the data area and the stack area (see
+figure below).  This allows the two areas to grow dynamically in different
+directions.
+<center>
+ <img src="memory.gif" >
+ <br>
+ Data and Stack Growth
+ </center>
+<p>
+<a href = "#Contents">Back To Contents </a>
+
+<hr><!-------------------------------->
+<p>
+<a name = "Topic5"> </a>
+<h3>
+Object Files
+</h3>
+<p>
+An object file is generated by the assembler after assembling an assembly
+program.  The object file contains the generated machine code and data for a 
+source file. The compilation of each source file results in an object file.
+These object files are later linked together with the required libraries (by
+the linker) to produce the executable file.
+<p> 
+Note that till the time linking is performed, the symbols in an object file
+(function and global variable names) cannot be assigned addresses.  The
+assignment of addresses is done later by the linker.  The format of the object
+file is similar to that for an executable but contains extra information so
+that linking can be performed.  The extra information is primarily a symbol
+table which specifies the symbols imported and exported by the object file,
+and a relocation table.  The relocation table is needed because absolute
+references to symbols in the code and data need to be patched up their correct
+values after the symbols have been assigned values.  This process is called
+relocation and is discussed in the next section.
+<p>
+<a href = "#Contents">Back To Contents </a>
+
+</p>
+<hr><!-------------------------------->
+<a name = "Topic6"> </a>
+<h3>
+The Linking Process
+</h3>
+<p>
+The linker takes a set of object files as input.  It scans each file to
+determine sizes of code and data sections etc., in each object.  The code and
+data sections etc., from the various files are combined to create consolidated
+code, data sections etc.  Now addresses can be assigned to all symbols since
+the starting address of the code, and data etc., from each object file is 
+known, and the symbol tables in the object files give the offset for each 
+symbol defined in the file from this starting address.  Relocation is
+performed next.
+<h4>Relocation</h4>
+The code and data in an object file typically contain references to symbols
+defined in the same file and in other files.  Relocation is the process of
+``patching up'' these references to contain the right addresses after
+addresses have been assigned to all symbols.  The relocation table contains
+the information necessary to carry out this process.  A relocation entry
+specifies an offset (where the relocation is to be performed), a relocation
+type, and the symbol name whose value should be used for reloction.  The
+relocation type may specify that the symbol value should be plugged in at the
+specified location, the symbol value should be added to the existing value at
+the specified location etc.
+<p>
+Here is an example to understand relocation better.
+<pre>
+	// file1.c							// file2.c
+	..								..	
+	..								..
+	g(); //call to function 'g'					void g(){
+	..								..
+	..								}
+	..								..	
+</pre>
+In the source file <tt>file1.c</tt>, a call to function <tt>g</tt> is made,
+and this function is defined in source file <tt>file2.c</tt>.  In the object
+file for <tt>file1.c</tt>, the call instruction should carry the address of
+the function <tt>g</tt> as the operand but this value is not known till
+linking time.  Therefore, the object file <tt>file1.o</tt> will contain a
+relocation entry specifying the place in the code where this relocation is to
+occur, the type of relocation, and the symbol name <tt>g</tt>.  Once the
+linker has assigned addresses to all symbols, it can perform this relocation.
+<p>
+Once relocation has been performed the linker outputs the final executable
+file.
+<a href = "#Contents">Back To Contents </a>
+
+
+</p>
+
+<hr><!-------------------------------->
+<a name = "Topic7"> </a>
+<h3>
+Statically Linked Libraries
+</h3>
+<p>
+A statically linked library (.lib files in Windows and .a files in Unix) is 
+essentially a collection of object files, in a specific format.  During
+linking, the libraries needed by the program are also specified to the linker.
+From each specified library, the linker only links the necessary object files
+with the program object files.
+<p>
+Most modern systems also support dynamically linked libraries.  There are many
+advantages of using dynamically linked libraries, such as, saving is disk
+space and memory, no need for relinking if the library changes etc.  The
+linking process with dynamically linked libraries is, however, much more
+complex and will be discussed in subsequent lectures.
+
+<p>
+<a href = "#Contents">Back To Contents </a>
+
+</p>
+<hr><!-------------------------------->
+<a name = "Topic8"> </a>
+<h3>
+References
+</h3>
+<p>
+
+<li> <a href = "http://www.itee.uq.edu.au/~cristina/students/david/honoursThesis96/bff.htm">http://www.itee.uq.edu.au/~cristina/students/david/honoursThesis96/bff.htm</a> <br>
+<li> <a href = "http://www.cs.ucdavis.edu/~haungs/paper">http://www.cs.ucdavis.edu/~haungs/paper</a> <br>
+<li> <a href = "http://www.iecc.com/linker/linker03.html">http://www.iecc.com/linker/linker03.html</a> <br>
+<li> <a href = "http://uw713doc.caldera.com/en/SDK_cprog/OF_Relocation.html">http://uw713doc.caldera.com/en/SDK_cprog/OF_Relocation.html</a> <br>
+
+<br><br>
+<a href = "#Contents">Back To Contents </a>
+
+</p>
+<hr>
+
+</body>
+</html>
+
+

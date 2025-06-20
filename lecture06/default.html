@@ -1,0 +1,253 @@
+<html>
+<head>
+<title>Lecture notes for CS330 (lecture - 6)</title>
+<!--
+	replace n above by the lecture number
+-->
+</head>
+<body text="#000000" link="#000000" vlink="#000000" background="..\bg3.gif">
+
+<center>
+<h2>
+Process Management
+<p>
+Lecture-6<br>
+Operating Systems (CS330)</h2>
+</center>
+
+<h4>
+Lecturer: Deepak Gupta<br>
+Notes prepared by: Ankit Soni<br>
+Lecture Date: August 7, 2004 
+</h4>
+</h4>
+<a name= "content"></a>
+<h4>Contents</h4>
+<ul>
+<li><a href="#need"> Need for the Process Concept.</a>
+<li><a href="#process">Process.</a>
+<li><a href= "#diff">Difference between a Process and a Program.</a>
+<li><a href= "#what">What makes up a Process.</a>
+<li><a href="#pcb" >Process Control Box.</a>
+<li><a href="#states"> Process States.</a>
+<li><a href="#transition"> Transition among the States.</a>
+<li><a href="#schedule"> Scheduling.</a>
+
+</ul>
+<br><br>
+<h4>
+About this Lecture
+</h4>
+
+In this lecture, we shall examine the notion of a process in more detail.
+We shall talk about the Process Control Block, the data structure used by
+the kernel to store information about a process, and process states.
+We shall also talk about scheduling and introducte the notion of context
+switch.
+<a name= "need"></a>
+<h4>
+Need for the Process Concept
+</h4>
+<p>
+Early computer systems allowed only one program to be executed at a time. This program had complete control of the system and its resources. Modern day computers allow multiple programs to be executed concurrently. In a Multi-programmed OS several program may be executing at the same time and even several instances of the same program may also be "running" at the same time. This requires firmer control and more compartmentalization of various programs, and resulted in the notion of 
+processes.
+</p>
+<a href="#content"> Back to Contents</a>
+<a name= "process"></a>
+<h4>
+Process
+</h4>
+<p>
+A process (sometimes called a task or a job) is an instance of the execution of a program or a "program in execution".
+<ul>
+<li>
+System processes are created by the OS to perform tasks on the user’s or system’s behalf.
+</li>
+<li>
+User processes are created more directly by user actions. They include application programs and system
+	utilities.
+</li>
+ 
+</ul>
+	
+	A process is much more than a program and hence there is need to clearly understand the difference between a process and a program.
+</p>
+<a name= "diff"></a>
+<a href="#content"> Back to Contents</a>
+<h4>
+Difference between a Process and a Program
+</h4>
+<p>
+	A program is a "passive" entity it is just some piece of code which might be stored in a file or even written on a piece of paper whereas a process is much more than the 
+    program's code. A process is an "active" entity and may be thought of as a "virtual computer" or a abstraction of a computer.
+	Although two processes may be executing the same program, they are nevertheless 
+    considered two separate execution sequences. For example several users may be running different copies of the mail program, or the same user may invoke 
+    many copies of the editor program. Each of these is a separate process and though the code in the address spaces of these processes is the same, the data vary. 
+</p>
+<a name= "what"></a>
+<a href="#content"> Back to Contents</a>
+<h4>
+What makes up a Process.
+</h4>
+
+The major components associated with a process are: its virtual address space,
+and the values of various CPU registers.  Of course, these values change as
+the process runs.  In addition to these, the operating system also internally
+maintains state information about the process, for example, information about
+files opened by the process.
+<p>
+
+The main data structure OS maintains about each process and its state is called the <i>Process Control Block</i> (PCB), or the task controlled block.
+
+</p>
+<a name= "pcb"></a>
+<a href="#content"> Back to Contents</a>
+<h4>
+Process Control Block
+</h4>
+<p>
+Every process has its own PCB in the kernel.  The PCB conceptually stores
+all information about the process that is ever needed by the kernel.  In
+practice, of course, all of this information is not typically stored in 
+a single structure, but in multiple structures that are all reachable
+(through pointers) from the PCB.  The information stored in the PCB includes:
+<ul>
+<li>
+Process id (pid)
+</li>
+<li>
+User id of owner
+</li>
+<li>
+Address translation tables for the process.
+</li>
+<li>
+Process state: new, ready, running, waiting, terminated (see below).</li>
+<li>
+Saved values of CPU registers.  For processes that are not currently running,
+the kernel needs to store the values of CPU registers so that these can be
+later restored when the process is rescheduled on the CPU.
+</li>
+<li>
+CPU scheduling and accounting information: priority, CPU time and other 
+resource usage etc. 
+This information is typically used by the scheduling algorithm to decide 
+which process to run next on the CPU.
+</li>
+<li>
+I/O status information: list of open files etc.
+</li>
+</ul>
+
+<a href="#content"> Back to Contents</a>
+<a name= "states"></a>
+<h4>
+Process States
+</h4>
+<p>
+At any given point of time, a process is in exactly one of the following states.
+</p>
+<ol>
+<li>
+New - the process is being created (its PCB is not yet fully initialized).
+</li>
+<li>
+Running - the process is currently being executed. At any point of time there can be only one such process in a uniprocessor system. Typically the kernel
+maintains a global variable (<i>current</i> in Linux) that points to the
+(PCB of the) currently running process.
+</li>
+<li>
+Ready - the process is ready to run but not currently running, there can be many such processes at a given time.
+(Pointers to PCBs of) All such processes are maintained in a list called the
+<i>Ready Queue</i>.  Since only ready to run processes are eligible to run on
+the CPU at any given time, the scheduling algorithm of the OS considers only
+processes in this list for scheduling next.
+</li>
+<li>
+Blocked/Waiting/Sleeping  - waiting for some "event" to occur (for an I/O operation to complete, or a resource to become available, etc.)
+</li>
+<li>
+Terminated - the process has been terminated, in UNIX also called as Zombie State.  In this state, only minimal information about the process (such as exit
+status and resource usage) is maintained about the process.  This information
+is also removed (and all traces of the process vanish) when some other process
+collects this information.
+</li>
+</ol>
+<a name= "transition"></a>
+<a href="#content"> Back to Contents</a>
+<h4>
+Transitions among States.
+</h4>
+<p align="center">
+<img border="0" src="processStateDiagram1.gif" width="369" height="263"></p>
+<p align="center"> <i>Process State Diagram </i></p>
+<ol>
+<li>
+<em>new --> ready </em>:- Process admitted to ready queue after its initialization
+is complete; it can now be considered for scheduling on the CPU.
+</li>
+<li>
+<em>ready --> running </em>:- CPU scheduler chooses this process to execute next, according to its scheduling policy.
+</li>
+<li><em> running --> ready (Preemption) </em>:- Process has used up its current time slice. Here the kernel is forcing the process to give up the CPU, the process is not waiting for any event occurrence.
+</li>
+<li>
+<em>running --> blocked </em>:- Process is waiting for some &quot;event&quot; to occur (for I/O operation to complete, etc.)
+</li>
+<li>
+<em>blocked --> ready</em>  :- Whatever "event" the process was waiting on has occurred.
+</li>
+</ol> 
+<p>
+		Note there is no direct transition from <em>blocked</em> to 
+the <em>running </em>state.  When the event that a process was waiting for
+occurs, the process is simply marked ready to run.  It would be picked up
+the scheduler for actually running on the CPU sometime later.  Also, the
+process cannot usually go directly from the blocked state to the 
+terminated state.
+<p>
+<a name= "term"></a>	
+<a href="#content"> Back to Contents</a>	
+<h4>
+Scheduling
+</h4>
+<p>
+As we have seen, the CPU is "time shared" among multiple processes.
+Scheduling is the process of deciding which process should run next
+on the CPU, and then making a <em>context switch</em> to this process.
+Scheduling may occur when
+<ol>
+<li>
+When a process terminates.
+</li>
+<li>
+Starts waiting for a "event" completion such as disk I/O.
+</li>
+<li>
+Even otherwise, the OS when it gains control (via an interrupt typically timer interrupts), may decide to force the currently running process to give up the CPU. This is called preemption.
+</li>
+</ol>
+In case of process termination and process waiting, we <em>must</em> 
+schedule some other process or else we are wasting CPU cycles 
+but in the third case scheduling may or may not happen depending on the
+OS policies. 
+If preemption can occur, the scheduling policy is called preemptive else 
+it is called non-preemptive.<br>
+</p>
+<a name= "cs"></a>
+<a href="#content"> Back to Contents</a>
+
+<h4>Related Links On Similar Topics</h4>
+               
+<ul>
+<li><a href="http://web.cse.iitk.ac.in/%7Ecs330/www03-04/notes/hw-review/ppframe.htm">Previous year's CS330 site</a></li>
+<li><a href="http://203.172.67.14/mdailey/class/2003_s2/its225/lectures.html">http://203.172.67.14/mdailey/class/2003_s2/its225/lectures.html</a></li>
+<li><a href="http://www.mcs.vuw.ac.nz/courses/COMP305/2004T1/LectureNotes/">http://www.mcs.vuw.ac.nz/courses/COMP305/2004T1/LectureNotes/</a></li>
+<li><a href="http://williamstallings.com/Extras/OS-Notes/h6.html">http://williamstallings.com/Extras/OS-Notes/h6.html </a></li>
+<li><a href="http://www.cs.kent.edu/~farrell/osf03/oldnotes/">http://www.cs.kent.edu/~farrell/osf03/oldnotes/</a></li>
+<li><a href="http://www.cs.fredonia.edu/%7ezubairi/s2k2/csit431/lects.html">http://www.cs.fredonia.edu/%7ezubairi/s2k2/csit431/lects.html</a></li>
+
+
+
+</body>
+</html>

@@ -1,0 +1,395 @@
+<html>
+<head>
+<title>Lecture notes for CS330 (lecture - 19)</title>
+</head>
+<body text="#000000" link="#000000" vlink="#000000" background="..\bg3.gif">
+
+<center>
+<h2>
+Java and PThread Support for Synchronization
+<p>
+Lecture-19<br>
+Operating Systems (CS330)
+</h2>
+</center>
+
+<h4>
+Lecturer: Deepak Gupta<br>
+Notes prepared by: Abhas Kumar, Y2002<br>
+Lecture Date: September 14, 2004
+</h4>
+
+<p>
+<br> 
+  <a name = "Contents"> </a>
+<h4>
+Contents
+</h4>
+
+<ul>
+<li> <a href = "#Topic1">About This Lecture </a> <br>
+<li> <a href = "#Topic2">Java Thread Synchronization</a> <br>
+<li> <a href = "#Topic3">PThread Synchronization</a> <br>
+<li> <a href = "#Topic4">Further Reading/Resources</a> <br>
+</ul>
+
+<p>
+<hr>
+<a name = "Topic1"> </a>
+<h3>About this lecture</h3>
+
+In this lecture, we will study the synchronization primitives supported
+by Java and by PThreads.  We illustrate the available facilities in both
+using the classical producer-consumer problem.
+
+<p>
+<a href = "#Contents">Back To Contents </a>
+<p>
+<hr>
+
+<a name = "Topic2"> </a>
+
+<h3>Java Thread Synchronization</h3>
+
+All the Java objects have a unique entry lock associated with it. But a usual 
+object does not behave as a monitor, since the lock is not acquired while 
+calling by the object methods. 
+<p>
+In the Java language, a critical section can be a block or a method and can be 
+easily identified using the <code>synchronized</code> keyword. The Java 
+platform ensures that any thread acquires a lock before entering such a 
+critical section.
+<p>
+As an example, consider a skeleton Java class defined as follows.
+
+<blockquote><pre>
+    public class C
+    {
+      ... 
+      ... (Other functions /declarations)
+      ...
+
+      public synchronized void f()
+      {
+         ...
+      }
+
+      private synchronized int g()
+      {
+         ...
+      }
+    }          
+</pre></blockquote>
+
+Note that both the method declarations for <code>f</code> and 
+<code>g</code> contain the <code>synchronized</code> keyword. Hence, 
+whenever the control enters these synchronized methods, the thread that 
+called the method locks the object whose method has been called. 
+Other threads cannot call any synchronized method on the same object until the 
+object is unlocked. To be more precise, two <code>synchronized</code> 
+functions can not be called concurrently on the same object. Please note 
+that each object has a distinct entry lock associated to it; two distinct
+objects have their own locks even if they belong to the same class. 
+
+<p>
+
+Every object is also associated with a single unnamed condition variable. 
+Methods <code>wait</code>, <code>notify</code>, and <code>notifyAll </code> 
+(implemented in the <code>Object</code> class) can be called on this unnamed 
+condition variable. The function prototypes are: 
+
+<blockquote><pre>
+    public final void <b>wait</b>()
+                     throws InterruptedException
+    
+    public final void <b>notify</b>()
+
+    public final void <b>notifyAll</b>()
+</pre></blockquote>
+
+Note that all these three functions also throw 
+<code>IllegalMonitorStateException</code>. We will discuss what it means 
+shortly.  
+<p>
+When <code>this.wait()</code> is called, the calling thread waits
+on the unnamed condition variable of the current object (<code>this</code>). 
+The thread goes to sleep, after leaving the lock atomically 
+(we already discussed why these instructions must be executed atomically. 
+To repeat, we do not want to lose any notify calls during the time-period 
+between the release of lock and going to sleep) and waits until another thread 
+notifies the threads waiting on this object's condition variable to wake up 
+either through a call to the <code>notify</code> method or the 
+<code>notifyAll</code> method. The thread then waits until it can re-obtain 
+ownership of the lock and resumes execution.  
+
+<p>
+It is trivial to notice that the calling thread must hold the entry lock, 
+to be able to call the <code>wait()</code> method. Thus the method should only 
+be called from a synchronized function or from some function which was called 
+directly or indirectly from some synchronized function. The basic idea is that 
+the thread must hold the entry lock of the object, to be able to call this 
+function. The function throws <code>IllegalMonitorStateException</code> in 
+case the current thread is not the owner of the object's entry lock.
+A thread can become the owner of the object lock in one of the 
+following three ways:
+
+<ul>
+<li>By executing a synchronized instance method of that object. 
+<li>By executing the body of a <code>synchronized</code> statement that 
+synchronizes on the object. 
+<li>For objects of type <code>Class</code>, by executing a synchronized 
+static method of that class. 
+</ul>
+
+Note that as the <code>wait</code> method  places the current thread into the 
+wait queue for this object, it unlocks only this object; any other objects on 
+which the current thread may be synchronized remain locked while the thread 
+waits. 
+<p>
+Following variants of the <code>wait</code> method are available: 
+<code>wait(long timeout)</code> and <code>wait(long timeout, int nanos)</code>.
+These methods can be used to specify a timeout after which the method 
+returns (after re-acquiring the lock, as usual) even after the thread has
+not been notified. Please consult the Java API for more details. 
+<p>
+The <code>notify</code> method wakes up a single thread that is waiting on 
+this object's condition variable. If any threads are waiting on this object, 
+one of them is woken up. The choice is arbitrary and occurs at the discretion 
+of the implementation. This method also throws 
+<code>IllegalMonitorStateException</code> if the current thread is not the 
+owner of this object's entry lock. 
+<p>
+The <code>notifyAll</code> method performs the same function as 
+<code>notify</code>, except that it wakes up all the threads that are waiting 
+on this object's condition variable. 
+
+<h4>Example: Implementation of Producer-Consumer Problem in Java</h4>
+Here is a possible implementation for the producer-consumer problem
+in Java.
+
+<blockquote><pre>
+   public class BoundedBuffer
+   {
+      private static int N=100;
+      private Item buffer[N];
+      private int in = 0 , out = 0, size = 0;
+      
+      public synchronized void add(Item i)
+      {
+         while(size==N)
+	   try{
+	      wait();
+	   }
+	   catch(InterruptedException e)
+	   {
+	      System.out.println(e);
+	   }
+	 buffer[in]=i;
+	 in=(in+1)%N;
+	 size++;
+	 notify(); // notify a consumer
+      }
+
+      public synchronized Item consume()
+      {  
+         Item i;
+         while(size==0)
+	   try{
+	      wait();
+	   }
+	   catch(InterruptedException e)
+	   {
+	      System.out.println(e);
+	   }
+	 i=buffer[out];
+	 out=(out+1)%N;
+	 size--;
+	 notify(); // notify a producer
+	 return i;
+      }
+   }
+</pre></blockquote>
+
+Note that in this solution, both producers and consumers wait on the
+same condition variable (the condition variable of the 
+<code>BoundedBuffer</code> object).
+However, we do not need to use <code>notifyAll()</code> instead of 
+<code>notify()</code>, since both producers and consumers cannot be
+sleeping at the same time. Thus, a producer will only wake up a
+consumer (not another producer), and a consumer will only wake up
+a producer (not another consumer).  In general, however, a different condition
+variable should be used for each logically distinct event in order
+to unnecessarily wake up more threads than necessary. 
+To avoid this, we need to use multiple Java objects since each Java object
+is necessarily associated with exactly one condition variable.  
+<a href="lecture19_code1.html">Here</a> is another Java solution to the
+producer-consumer problem where producers and consumers wait on
+different condition variables.
+<p>
+<b>Exercise: </b>Implement a semaphore class in Java. 
+<p>
+<a href = "#Contents">Back To Contents </a>
+
+<p>
+<hr>
+<a name="Topic3"></a>
+
+<p>
+<h3>POSIX Thread API</h3>
+
+The POSIX library provides support for both mutexes and condition variables. 
+The functions associated with these primitives are explained below.
+<h4>Mutex</h4>
+A mutex is a binary semaphore, having two possible states: unlocked 
+(not owned by any thread), and locked (owned by one thread). A mutex can never 
+be owned by two different threads simultaneously. A thread attempting to lock 
+a mutex that is already locked by another thread is suspended until the owning 
+thread unlocks the mutex. 
+<blockquote><pre>
+     <b>pthread_mutex_t</b> mutex;
+     int  <b>pthread_mutex_init</b>(pthread_mutex_t *mutex, const pthread_mutex_attr_t *mutexattr);
+     int  <b>pthread_mutex_lock</b>(pthread_mutex_t *mutex);
+     int  <b>pthread_mutex_trylock</b>(pthread_mutex_t *mutex);
+     int  <b>pthread_mutex_unlock</b>(pthread_mutex_t *mutex);
+     int  <b>pthread_mutex_destroy</b>(pthread_mutex_t *mutex);
+</pre></blockquote>
+The first statement above illustrates the declaration of a mutex.
+<code>pthread_mutex_init</code> initializes the mutex object pointed to 
+by <code>mutex</code> according to the attributes specified in 
+<code>mutexattr</code>. If <code>mutexattr</code> is <code>NULL</code>, 
+default attributes are used instead.
+<p>The Linux PThread implementation supports only one mutex attribute, the 
+mutex kind, which is either `fast', `recursive' or `error checking'. The kind 
+determines whether it can be locked again by the thread that already owns it. 
+The default kind is `fast'.  Consult the manual page of 
+<code>pthread_mutexattr_init</code> for more information on mutex attributes.  
+
+<p><code>pthread_mutex_lock</code> locks the given mutex. In case the mutex is 
+currently locked by another thread, the method suspends the calling thread 
+until the mutex is unlocked. Else, if the mutex is currently unlocked, it is 
+locked and owned by the calling thread, and <code>pthread_mutex_lock</code> 
+returns immediately.
+
+<p><code>pthread_mutex_trylock</code> behaves identically to 
+<code>pthread_mutex_lock</code>, except that it does not block the calling 
+thread if the mutex is already locked, instead, it returns immediately with 
+the error code <code>EBUSY</code>.
+
+<p><code>pthread_mutex_unlock</code> unlocks the given mutex. The mutex is 
+assumed to be locked and owned by the calling thread on entrance to 
+<code>pthread_mutex_unlock</code>. 
+
+<p><code>pthread_mutex_destroy</code> destroys a mutex object, freeing the 
+resources it might hold. The mutex must be unblocked on entrance. 
+
+<p>
+<h4>Condition Variables</h4>
+This synchronization device allows threads to suspend execution and relinquish 
+the processors until some predicate on shared data is satisfied.
+<blockquote><pre>
+       <b>pthread_cond_t</b> cond;
+       int <b>pthread_cond_init</b>(pthread_cond_t *cond, pthread_condattr_t *cond_attr);
+       int <b>pthread_cond_wait</b>(pthread_cond_t *cond, pthread_mutex_t *mutex);       
+       int <b>pthread_cond_signal</b>(pthread_cond_t *cond);
+       int <b>pthread_cond_broadcast</b>(pthread_cond_t *cond);
+       int <b>pthread_cond_timedwait</b>(pthread_cond_t *cond, pthread_mutex_t *mutex, const struct timespec *abstime);
+       int <b>pthread_cond_destroy</b>(pthread_cond_t *cond);
+</pre></blockquote>
+The first statement declares a condition variable. 
+<code>pthread_cond_init</code> initializes the condition variable 
+<code>cond</code> using the condition attributes specified in 
+<code>code_attr</code>, or default in case <code>cond_attr</code> is 
+<code>NULL</code>. 
+
+<p><code>pthread_cond_wait</code> atomically unlocks the mutex 
+and waits for the condition variable <code>cond</code> to be signaled. The 
+thread execution is suspended and does not consume any CPU time until the 
+condition variable is signaled. The <code>mutex</code> must be locked by the 
+calling thread. Before returning to the calling thread, 
+<code>pthread_cond_wait</code> re-acquires <code>mutex</code>. The
+<code>mutex</code> is required as an argument, since release of the 
+<code>mutex</code> and going to sleep must happen atomically. 
+
+<p><code>pthread_cond_signal</code> restarts one of the threads that were 
+waiting on the condition variable <code>cond</code>. If no threads are 
+waiting on <code>cond</code>, nothing happens. If several threads are waiting 
+on <code>cond</code>, exactly one is restarted, but it is not specified which 
+one. It must be noted that, the thread woken is not scheduled instantly, 
+instead, it is made ready, and gets scheduled later according to the 
+scheduling policy. 
+
+<p><code>pthread_cond_broadcast</code> restarts all the threads which were 
+waiting on the condition variable <code>cond</code>.
+
+<p><b>Example: Implementation of Producer-Consumer problem</b>
+<p>
+We illustrate the PThread synchronization primitives using the familiar
+producer-consumer problem.
+<blockquote><pre>
+   #include &lt;pthread.h&gt;
+   #define N 100   
+
+   class BoundedBuffer
+   {
+      Item buffer[N];
+      int in, out, size;
+      pthread_mutex_t mutex;
+      pthread_cond_t not_full, not_empty;
+
+      BoundedBuffer()
+      {
+         in=out=size=0;
+         pthread_mutex_init(&amp;mutex,NULL);
+	 pthread_cond_init(&amp;not_full,NULL);
+	 pthread_cond_init(&amp;not_empty,NULL);
+      }
+
+      void add(Item i)
+      {
+         pthread_mutex_lock(&amp;mutex);
+         while(size==N)
+	    pthread_cond_wait(&amp;not_full, &amp;mutex);
+	 buffer[in]=i;
+	 in=(in+1)%N;
+	 size++;
+	 pthread_cond_signal(&amp;not_empty);
+	 pthread_mutex_unlock(&amp;mutex);
+      }
+
+      int consume()
+      {
+         pthread_mutex_lock(&amp;mutex);
+	 while(size==0)
+	    pthread_cond_wait(&amp;not_empty, &amp;mutex);
+	 int i=buffer[out];
+	 out=(out+1)%N;
+	 size--;
+	 pthread_cond_signal(&amp;not_full);
+	 pthread_mutex_unlock(&amp;mutex);
+      }
+   };
+</pre></blockquote>
+<p>
+<a href = "#Contents">Back To Contents </a>
+
+<p>
+<hr>
+<a name="Topic4"></a>
+
+<p>
+<h3>Further readings/Resources</h3>
+<ul>
+<li><a href="http://java.sun.com/docs/books/tutorial/essential/threads/multithreaded.html">Synchronizing Threads : The Java Tutorial</a>
+<li><a href="http://www.ccs.neu.edu/home/kenb/3338/tutorial.html">Java Synchronization Tutorial : Northeastern University, Boston</a>
+<li><a href="http://www.mcs.drexel.edu/~shartley/ConcProgJava/monitors.html">Concurrent Programming Using Java language</a>
+<li><a href="http://java.sun.com/j2se/1.4.2/docs/api/">Java API</a>
+<li><a href="http://gee.cs.oswego.edu/dl/cpj/jmm.html">Synchronization and the Java Memory Model</a>
+<li>Manual pages of PThread calls.
+</ul>
+<p>
+<a href = "#Contents">Back To Contents </a>
+<p>
+<hr>
+
+</body>
+</html>

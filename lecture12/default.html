@@ -1,0 +1,179 @@
+<html>
+<head>
+<title>Lecture notes for CS330 (lecture - 12)</title>
+<!--
+	replace n above by the lecture number
+-->
+</head>
+<body text="#000000" link="#000000" vlink="#000000" background="..\bg3.gif">
+<center>
+<h2>
+Threads
+<p>
+Lecture-12<br>
+Operating Systems (CS330)
+</h2>
+</center>
+
+<h4>
+Lecturer: Deepak Gupta<br>
+Notes prepared by: Shashi Mittal<br>
+Lecture Date: August 24, 2004
+</h4>
+<a name="contents">
+<h4>
+Lecture contents
+</h4>
+<ul>
+<li><a href="#sec1">What are threads?</a>
+<li><a href="#sec2">Why have threads?</a>
+<li><a href="#sec4">Thread Implementation</a>
+</ul>
+
+<hr>
+<!--Use the &lt;p&gt tag to separate pages
+-->
+
+<a name="sec1">
+<h4>
+What are threads ?
+</h4>
+Just as a process is the abstraction of the whole computer, a thread is an
+  abstraction of a processor.  A thread (also sometimes referred
+  to as a <strong>light weight process (LWP)</strong> ), is the basic unit of
+		execution on the CPU.  So far, we have been assuming the
+traditional Unix model of processes where each process has exactly one
+thread of control (i.e., the process is executing exactly one sequence of
+instructions).  In most modern operating systems (including Linux and other
+modern flavours of Unix), however, a process may have multiple threads.
+<p>
+A process may spawn several threads. However, all the threads share
+	  the same resources and virtual address space, viz. that of the
+	  process. Thus a process should be more correctly viewed as a 
+container of resources such as an address space, threads, open files etc.
+<p>
+Since a thread is the basic unit of execution on the CPU, each thread has
+its own (virtual) set of CPU registers (which are saved and restored on
+context switch).  Similarly, the state (such as running, runnable etc.)
+applies to threads now rather than processes.  Note that though different
+threads of a process require different stacks for execution, all these
+stacks are part of the same virtual address space (of the process).
+
+<p>
+A traditional process has a single thread of execution. The diagram
+	  below shows the concept of multi threading in a process.
+<p>
+<a href="#contents">Back to contents</a>
+<hr>
+
+<a name="sec2">
+<h4>
+Why have threads?
+</h4>
+The main aim of multi-threading is to achieve parallelism in the application.  
+Recall that even on a uni-processor system, I/O and CPU computation can
+proceed in parallel, so there is a benefit to be gained by writing 
+multi-threaded applications even on such systems.
+<p>
+We saw earlier, that the application may create multiple processes in order
+to achieve parallelism.  Which of the two techniques (multiple processes
+v/s multiple threads) should then be used?
+
+<p>Using multiple processes has the principal advantage over using
+multiple threads.
+Since processes run in different address spaces, they can only
+interact using well-defined interfaces.  Thus the application design
+is more modular.  Errors in one part of the program are less likely to
+propogate to other parts.
+<p>
+However, using multiple processes has a significant performance disadvantage
+over using multiple threads.  This is primarily because thread operations
+are, in general, order of magnitude faster than corresponding operations on
+processes.  For example, creation of a new process requires a new address
+space to be created and initialized, a number of data structures need to
+be initialized etc.  In comparison, thread creation is much quicker.
+<p>
+Also, context switch from a process to another process is much more expensive
+than a context switch between two threads of the same process.  This is 
+because the address space does not change in the latter case, thus after
+the context switch, cache misses are likely to be fewer.  As we will see
+later, recently used address translations are also cached by the CPU in a 
+special cache called the Translation Look-aside Buffer (TLB).  When the
+address space changes, TLB misses are also likely to be much greater in
+number.
+<p>
+<a href="#contents">Back to contents</a>
+<hr>
+
+<a name="sec4">
+<h4>
+Thread Implementation
+</h4>
+<a name="main2">
+The most obvious way is to implement threads at the kernel level.
+That is, the kernel supports primitives (system calls) for thread
+creation etc.  In this case, the kernel data structures related
+to processes have to be somewhat different that what we saw earlier.
+Essentially, in addition to the PCB, the kernel needs to maintain
+a Thread Control Block (TCB) for each thread.  All information
+relating to individual threads, such as, saved register values,
+kernel stack area etc., need to be stored in the TCB rather than
+the PCB.  For convenience, the kernel would usually maintain a
+pointer to the PCB of the containing process from a TCB, and
+link TCB's of all threads of the same process in a linked list
+whose starting pointer is stored in the PCB of the containing
+process.  Most modern operating systems include support for
+threads at the kernel level.
+<p>
+The main problem with kernel level thread implementation is
+that all thread operations require system calls.  As we have
+seen system call overhead is quite substantial, and this is
+especially important that the thread operations themselves are
+quite fast.  Thus the relative overhead due to system calls
+is quite high.
+<p>
+<center><img src="fig3.gif"></center>
+<p>
+It is also possible to implement threads at the user level.  Here, a 
+user level thread library implements primitives for thread creation etc.
+The key point to understand is that in this case the kernel sees the
+process as having just one thread.  It is the library that timeshares
+this single kernel level thread (or a virtual processor) among the
+threads created at the user level.  Thus the library needs to implement
+its own scheduling algorithm, context switch mechanism, and primitives
+to support operations on threads.
+<p>
+<center><img src="fig4.gif"></center>
+
+<p>
+The primary advantage of user level threads is their speed.  Since all
+thread operations are performed in the library itself, system calls are
+not required for any operation.  Another advantage is that it is possible
+(at least in principle) to have application specific scheduling policies
+for scheduling the threads of a particular application process.
+<p>
+However, user threads suffer from some major disadvantages. Since the kernel
+sees only one schedulable entity, multiple user level threads of a process
+cannot execute in parallel even if the underlying machine has multiple
+processors.  Also if one of the threads blocks in the kernel, none of the
+other threads of the process can execute since the kernel puts the 
+<i>process</i> to sleep.  The only way to avoid this is to not use
+any synchronous (blocking) system calls in such an application.  This is,
+however, not always possible or convenient.
+<p>
+Some thread implementations use a hybrid approach for implementing threads.
+Here there is support for threads both at the kernel level, and also in a
+user level library.  Essentially the user level library, in this case,
+timeshares <i>k</i> kernel-level threads among <i>u</i> user-level threads.
+Usually <i>u</i> is larger than <i>k</i>.  The advantage of such an approach
+is that not all thread operations require system calls.  For example, not
+all thread creation requests at the user level will result in a system call
+to create a kernel level thread.  Also, if a thread goes to sleep in the
+kernel, other user-level threads can still be scheduled on other kernel level
+threads.
+
+<p>
+<a href="#contents">Back to contents</a>
+<hr>
+</body>
+</html>

@@ -1,0 +1,236 @@
+<html>
+<head>
+<title>Lecture notes for CS330 (lecture - 18)</title>
+<!--
+	replace n above by the lecture number
+-->
+</head>
+<body text="#000000" link="#000000" vlink="#000000" background="..\bg3.gif">
+
+<center>
+<h2>
+High level synchronization constructs<p>
+Lecture-18<br>
+Operating Systems (CS330)
+</h2>
+</center>
+
+<h4>
+Lecturer: Deepak Gupta<br>
+Notes prepared by: Gurmeet Singh<br>
+Lecture Date: September 13, 2004
+</h4>
+
+<h4>
+About the lecture
+</h4>
+In the previous lectures, we have seen how the synchronization problems
+can be solved at the kernel level for uni-processor and multi-processor
+systems.  As we know, user-level multi-threaded applications have similar
+synchronization requirements.  These applications rely on kernel or thread
+library provided facilities for achieving the desired synchronization.
+<p>
+We should note that in a user-level thread library (i.e., where threads
+are implemented entirely at the user level), the synchronization issues
+are similar as in kernels for uni-processors (since the library timeshares
+a single virtual processor among multiple user-level threads).  Similar 
+solutions can therefore be used.  For instance, the library code may be 
+made ``non-preemptable''.   Signals handled by the library (for example,
+the timer signal) are similar to interrupts at the kernel level and 
+the ``interrupt disabling'' technique can be used to protect data structures 
+also accessed by signal handlers.  Semaphores can be implemented in such
+a library in a fashion similar to that for the kernel.
+<p>
+For a hybrid thread implementation, the thread library would use techniques
+similar to those used in multi-processor kernels since here is library
+is timesharing a number of virtual processors (kernel threads) among a 
+larger number of user-level threads.
+<p>
+In this lecture, we focus attention on user-level programs.  We discuss
+some high level synchronization constructs other than semaphores and see
+how common synchronization problems can be solved using these constructs.
+
+<h4>
+Use of semaphores to solve the Producer-Consumer problem</h4>
+
+<p>
+We can easily solve the producer-consumer problem by using three
+semaphores. A semaphore <i>mutex</i> is used for the purpose of providing 
+mutual exclusion. Another semaphore <i>empty_slots</i> is used by
+producers to reserve an empty slot in the buffer.   Similarly,
+consumers use a semaphore <i>full_slots</i> to reserve a full slot
+(for emptying) in the buffer.  Note that the number of full slots
+(empty slots) in the buffer may be more than one at some point in
+time.  In this case, the semaphore semantics will allow as many
+producers (consumers) to reserve empty slots (full slots) as the
+number of such slots available.  The semaphore <i>mutex</i> will
+however ensure that the buffer is accessed mutually exclusively.
+Note also that at any given point in time, the sum of the values
+of the two semaphores <i>empty_slots</i> and <i>full_slots</i>
+would always be equal to N - the total number of slots in the buffer.
+
+<PRE>	
+        // shared variables
+        item queue[N];
+	int in=0,out=0;
+	semaphore mutex=1, empty_slots=N, full_slots=0;
+	
+Producer:
+	while (true) {
+		produce item i;
+		P(empty_slots); // wait for an empty slot
+		P(mutex);	// wait for mutual exclusion
+		queue[in]=i;	in= (in+1)%N;
+		V(mutex);
+		V(full_slots);  // one more full slot available
+	}
+
+Consumer:
+	while (true) {
+		P(full_slots);	// wait for a full slot
+		P(mutex);
+		i=queue[out];	out= (out+1)%N;
+		V(mutex);
+		P(empty_slots);	// one more empty slot available
+		consume item i;
+	}
+</PRE>
+	
+<h4>
+Disadvantages of using semaphores</h4>
+	
+<p>
+Although semaphores provide a convenient and effective mechanism for 
+synchronization, their incorrect use can result in severe errors such
+as a dead-lock state or violation of mutual exclusion. And this may happen 
+even due to a mistake in a single process. The important thing is that these 
+type of mistakes are very difficult to trace at the time of debugging because 
+the errors happen only if when some particular execution sequence take place. 
+Consider the following examples.
+	
+<PRE>		V(s)				P(s)		
+		-----				-----
+		critical section		critical section
+		-----				-----
+		P(s)				// programer omits the V(s) operation
+		example (i)			example (ii)
+</PRE>
+In example (i), the P and V operations are interchanged. When this process 
+enters its critical section instead of reducing the value of s by one it 
+increases the value by one; therefore two more processes can enter into the 
+critical section. Note that this error will manifest itself only if some other 
+process enters in critical section when this process is executing in critical 
+section.
+	
+<p>
+In example (ii), the V(s) operation is omitted. Once this process enters into 
+the critical section, all the other processes that want to enter the critical 
+section will go into deadlock state.
+
+<h4>
+Critical Region Constructs</h4>
+<p>
+To overcome the errors due to incorrect use of semaphores by the programmers,
+a number of high level language constructs have 
+been introduced. One of them is the Critical Region construct. This construct 
+requires that a variable v of type T, which is to be shared among many 
+processes, be declared as 
+<PRE>
+    v: shared T;
+</PRE>
+and can be accessed only inside <i>region statements</i> as:
+
+<PRE>
+    region v when B do S;
+</PRE>
+
+This construct ensures that, while statement S is being executed, no other 
+process can access the variable v. The expression B is a Boolean expression.
+When a process tries to enter in the critical region, 
+the Boolean expression B is evaluated; if it is false the process must wait 
+until B becomes true. 
+Such ``guard expressions'' can be used to model the conditions in 
+synchronization problems. For example, in the Producer-Consumer problem we can 
+check empty and full conditions using such expressions.
+<p>
+A solution to the producer-consumer problem using the conditional region
+construct is left as an exercise.
+<h4>
+Monitors
+</h4>
+
+<p>
+Another high level synchronization construct is the Monitor construct. 
+A monitor encapsulates the data and the code of operations on the data, just
+like an object in object-oriented programming. The data 
+can be accessed only through the operations defined within the monitor. 
+These operations are called the entry points for the data.
+<PRE>
+	Monitor X {
+		data 
+		operation f:
+			code of operation f
+		operation g:
+			code of operation g
+	}
+</PRE>
+<p>
+The monitor construct ensures that only one process at a time can be 
+active within the monitor. For example, while a process P1 is executing the 
+operation f of the monitor shown above, another process P2 can not execute 
+f or g. The programmer does not need to code this synchronization constraint 
+explicitly. A monitor uses an entry lock for this purpose. Each process must 
+acquire the entry lock before entering the operation code.
+<p>
+Monitors also provide the <i>condition variable</i> construct for allowing
+processes to wait for events to occur (recall the events discussed earlier
+in the context of kernel synchronization).  Any number of condition
+variables can be declared within a monitor.  
+The operations on the conditional variables are <i>Wait</i>, <i>Signal</i>,
+ and <i>Broadcast</i>.  The <i>Wait</i> operation causes the calling process
+to <i>atomically</i> give up the monitor lock and go to sleep in a queue
+associated with the condition variable.  The atomicity here is required
+to ensure that no wakeups are ``lost'', as before.  After waking up, the
+process reacquires the entry lock of the monitor before returning from
+<i>Wait</i>.  The <i>Signal</i>
+operation wakes up one process waiting on the condition variable, while
+the <i>Broadcast</i> operation wakes up all such processes.
+
+<p>We illustrate the use of monitors using the producer-consumer problem. 
+In the following solution, the buffer is encapsulated in a monitor with
+operations for adding and removing items from the buffer.  Once the
+monitor is defined, the producer and consumer processes only need to
+repeatedly call the add and remove operations respectively.
+<PRE>	
+    Monitor bounded_buffer {
+        int in=0, out=0, size=0;
+        item queue[N];    // data of the monitor
+        condition not_full, not_empty;    // condition variables
+            
+        void add(item i) {
+            while(size==N)    
+                wait(not_full);  // waits for signal operation on not_full
+            queue[in]=i; in = (in+1)%N;
+            size++;
+            signal(not_empty);
+        }
+        
+        item remove() {
+            while(size==0)    
+                wait(not_empty); // waits for signal operation on not_empty
+            i= queue[out]; out = (out+1)%N;
+            size--;
+            signal(not_full);
+            return i;
+        }
+    }
+</PRE>
+There is no need to explicitly code for mutual exclusion because it is ensured 
+by the monitor construct. So the code is quite straight foreward. When size 
+becomes N, the add operation invokes the wait operation on condition variable 
+not_full. Note that the wait operation first releases the entry lock acquired 
+by the add operation and sends the process executing this operation, say P, 
+into sleep. When remove operation invokes the signal operation on 
+not_full, the process P will be woken up and when it returns into add 
+operation it will have the entry lock again.
+</body></html>

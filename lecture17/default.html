@@ -1,0 +1,305 @@
+<html>
+<head>
+<title>Lecture notes for CS330 (lecture - 17)</title>
+</head>
+<body text="#000000" link="#000000" vlink="#000000" background="..\bg3.gif">
+<center>
+<h2>
+Synchronization in Preemptible and Multi-Processor Kernels
+<p>
+Lecture-17<br>
+Operating Systems (CS330)</h2>
+</center>
+
+<h4>
+Lecturer: Deepak Gupta<br>
+Notes prepared by: Uttam Kumar Tripathi<br>
+Lecture Date: September 10, 2004 
+</h4>
+</h4>
+<a name= "content"></a>
+<h4>Contents</h4>
+<ul>
+<li><a href="#synchro"> Synchronization in preemptible kernels.</a>
+<li><a href="#pre">Semaphore implementation for preemptible kernels.</a>
+<li><a href= "#mut">Mutual exclusion on multi-processors.</a>
+<li><a href= "#testset">Hardware support for mutual exclusion.</a>
+<li><a href="#sema"> Semaphore implementation for multi-processors</a>
+<li><a href="#int-multi">Synchronization with interrupt handlers</a>
+</ul>
+
+<br><br>
+<h4>
+About This Lecture
+</h4>
+
+In the last two lectures, we saw how synchronizaton issues can be solved in a 
+non-preemptible kernel.
+In this lecture we will look how to handle synchronization issues in
+case of preemptible kernels and in kernels for multi-processors.
+<p><a href="#content"> Back to contents</a> 
+<a name= "synchro"></a>
+<h4>
+Synchronization in preemptible kernels.
+</h4>
+We know that mutual exclusion within the kernel can <i>always</i> be
+achieved by disabling interrupts.  However disabling interrupts for
+ensuring exclusive access to all data structures is not desirable since
+this implies that interrupts may be disabled for long periods of time,
+and some interrupts may be lost as a consequence.  Making the kernel
+non-preemptible avoids this problem, since now interrupts need to be
+disabled only while accessing data structures which are also accessed
+by one or more interrupt handlers.
+<p>
+But, in some cases, we do not wish the kernel to be non-preemptible.
+This is true, for example, if we want the kernel to support real-time
+applications (where predictability of response time is important).
+So how do we ensure exclusive access to a data structure in a preemptible
+kernel?
+<p>
+The solution is to use semaphores or locks to protect access to 
+global data structures (except for those data structures that are
+also accessed by interrupt handlers; see below).  The required
+atomicity in the semaphore implementation can, of course, be
+ensured by disabling interrupts.  Note that in this scheme, 
+while accessing a global data structure, interrupts are not
+disabled for the entire duration of access to the structure,
+but only for the brief time it takes to acquire and release
+the semaphore (or the time it takes to test the semaphore
+value and going to sleep).  Also note that while accessing
+the data structure, if the current process is preempted, and
+the new process that starts running also wishes to access
+the same data structure, it will have to acquire the semaphore
+first; and since the semaphore is not available, it will go
+to sleep.
+<p>
+Data structures that are also accessed by some interrupt handler
+need to protected by disabling interrupts as before, and not
+by using a semaphore.  This is because using a semaphore in
+this case may lead to a <i>deadlock</i>!  Consider the following
+sequence of events.  The current process acquires the semaphore
+associated with a data structure D, and proceeds to modify the
+data structure.  During modification, an interrupt occurs and
+the interrupt handler also needs to access D.  Clearly the
+interrupt handler will also need to acquire the semaphore first,
+but the semaphore is not free.  This means that the interrupt
+handler goes to sleep.  But remember that the interrupt handler
+is running in the context of the current process, and consequently
+it the current process itself that goes to sleep.  Thus we have
+a situation that a process is waiting for a semaphore to be released,
+but the process itself holds the semaphore!  Clearly the process
+will sleep forever.
+
+<p>
+<li><a href="#content"> Back to contents</a> 
+<a name= "pre"></a>
+<h4>
+Semaphore implementation for preemptible kernels
+</h4>
+We need to modify the previous implementation of semaphore operations,
+since now a process may get preempted after testing the value of the
+semaphore and before decrementing it.  We need to disable interrupts
+to prevent this from happening.  The semaphore implementation
+for a preemptible kernel might look like the following.
+
+<pre>
+P(S):                                V(S):
+    disable interrupts;                  disable interrupts;
+    while (S.value <= 0)                 S.value++;
+        sleep(S.event);                  wakeup(S.event);
+    S.value--;                           restore interrupt level;
+    restore interrupt level;
+</pre>
+Note that in the <i>P</i> operation,
+we do not repeatedly need to disable interrupts in
+the loop since the implementation of sleep ensures that interrupts
+are again disabled before sleep returns (see 
+<a href="..\lecture16\default.html">lecture 16</a>).  Also note that it would
+be incorrect to reenable interrupts just before sleep, and disabling
+them again after returning from sleep.  This is because, a preemption
+may occur just after enabling interrupts (i.e., before actually 
+calling sleep).  If the process that runs after preemption releases
+the semaphore, its wakeup would be ``missed'' by the original
+process, and on getting rescheduled this process will go to sleep
+anyway, possibly never to wakeup.  This phenomenon is called the
+``lost wakeup problem''.  We will visit this problem again in other
+contexts.
+
+<p><a href="#content">Back to contents</a> 
+<a name= "mut"></a>
+<h4>
+Mutual exclusion on multi-processors
+</h4>
+<p>
+On a multi-processor machine, several processes can be actually running
+at the same time (as opposed to being merely runnable).
+Thus on such a machine, disabling interrupts does not guarantee
+mutual exclusion since another process may be running at the same time on
+another physical processor.  On multi-processors, mutual exclusion cannot
+therefore be ensured without using some form of busy waiting.  However,
+primitives that use busy waiting can be used to build higher level
+primitives, the use of which minimises busy waiting.
+<p>
+For implementing mutual exclusion using busy waiting, the classical
+mutual exclusion algorithms such as the Bakery Algorithm can be used.
+However, usually there is hardware support which allows mutual exclusion
+to be implemented in a simpler fashion.
+
+<p><a href="#content>Back to contents</a>
+
+<a name= "testset"></a>	
+<h4>
+Hardware support for mutual exclusion
+</h4>
+Note that if there is an <i>atomic</i> way of both reading and writing
+a memory location, mutual exclusion is easy to implement. (how?)
+Different architectures offer different forms of this support.  We will
+consider a common instruction that <i>atomically</i> reads a memory
+location, stores this value in a register, and set the value of the
+memory location to 1.  Such an instruction is called a <i>test-and-set</i>
+instruction.  At the hardware level, such an instruction might be implemented
+by locking the system bus (and hence preventing other processors from
+accessing memory) for the duration of the instruction which involves a 
+memory read cycle, and a memory write cycle.
+<p>
+Thus the test-and-set instruction could look like:
+<pre>
+test-and-set R, X
+</pre>
+Here R is a register, and X is the address of a memory location.
+The instruction <i>atomically</i> copies the old value of the 
+memory location X to register R, and sets the new value of location
+X to 1.
+<p>
+We can now use the test-and-set instruction to build a mutual exclusion
+primitive called a spin-lock (so named since a process attempting to
+acquire a locked spin-lock needs to ``spin'' in a loop).  For simplicity,
+let us assume that a C function <tt>test_and_set(int *)</tt> is available
+with functionality similar to the test-and-set instruction.  That is,
+the <tt>test_and_set</tt> function returns the old value of the memory
+location whose address is passed as argument, and sets the new value of
+the memory location to 1; the read and write of the memory location are
+guaranteed to be atomic.
+<p>
+A spin-lock can now be implemented simply as an integer: value 0 denotes
+that the lock is free, and the value 1 denotes that it is held.  The lock
+and unlock operations can be implemented as follows.
+<pre>
+spin_lock(int *lock) {             spin_unlock(int *lock) {
+    while (test_and_set(lock));        *lock = 0;
+}                                  }
+</pre>
+
+<p><a href="#content"> Back to contents</a> 
+<a name= "sema"></a>
+<h4>
+Semaphore implementation for multi-processors
+</h4>
+Mutual exclusion can be ensured on a multi-processor using spin locks.
+However busy waiting wastes CPU cycles, and therefore it should be used
+as little as possible.  The solution is to use busy waiting to build
+higher level synchronization primitives such as sempahores.  Note that
+this is a similar idea to using interrupt disabling to implement semaphores
+in a preemptible kernel for a uni-processor machine.  Here is a possible
+implementation of the semaphore operations in a multi-processor kernel.
+The implementation assumes a new field <tt>lock</tt> - spin lock, in the
+semaphore structure.
+<pre>
+P(S):                                       V(S):
+    done = false;                               spin_lock(&S.lock);
+    while (not done) {                          S.value++;
+        spin_lock(&S.lock);                     wakeup(S.event);
+        // can test S.value now                 spin_unlock(&S.lock);
+        if (S.value <= 0) {
+            spin_unlock(&S.lock);
+            // what if V happens here?
+            sleep(S.event);
+        } else {
+            done = true;
+            S.value--;
+            unlock(&S.lock);
+        }
+    }
+</pre>
+In the above implementation, consider what would happen if a process
+performs the V operation (and hence the wakeup on the event) after
+a process doing the P operation unlocks the spin lock but before it
+goes to sleep (gets added to the wait queue for S.event).  The
+wakeup will be lost, and the process may wait for ever - the familiar
+lost wakeup problem.  In order to prevent this from happening, the
+unlocking of the semaphore must be atomically performed with respect
+to going to sleep on the event.  Note that if the spin lock is unlocked
+<i>after</i> (and not before) the call to <i>sleep</i>, no process
+would be able to do a V operation since the spin lock is busy.
+<p>
+How can unlocking a spin lock and going to sleep be made atomic?
+Observe that the <i>sleep</i> function essentially adds the current process to 
+the wait queue for the event, sets its state to <i>Sleeping</i> and 
+then calls <i>schedule</i> to give up the CPU.  The trick is to 
+release the spin lock just before calling <i>schedule</i>.  Since at
+this point, the process <i>has</i> been added to the wait queue,
+the wakeup cannot be missed.  Of course, for this to work, we need
+another argument to the <i>sleep</i> function - a spin lock.
+For convenience, usual implementations of such a sleep function would
+also reacquire the spin lock after waking up, just before returning.
+Assuming that to be the case, there is no need (and is in fact incorrect)
+to acquire the spin lock inside the loop.  A correct P implementation would 
+thus be the following.
+<pre>
+P(S): 
+    spin_lock(&S.lock);
+    while (S.value <= 0)
+        sleep(S.event, &S.lock); 
+    S.value--;
+    spin_unlock(&S.lock);
+</pre>
+Semaphores, instead of spin locks, can now be protected to ensure exclusive
+access to global data structures within the kernel.  Note, however, that
+in some cases, spin locks may actually be preferable.  This would be when
+a lock is going to be held for a very brief period of time.  In this case,
+the overhead of busy waiting would be less than the overhead of two context
+switches which would be required in case of a blocking lock or semaphore.
+
+<p><a href="#content"> Back to contents</a>       
+<a name="int-multi">
+<h4>
+Synchronization with Interrupt Handlers
+</h4>
+For a multi-processor, how do we protect data structures that are also
+accessed by interrupt handlers?  For a preemptible kernel for uni-processors,
+we saw that semaphores cannot be used in this case, interrupt disabling
+is needed.  For multi-processors, interrupt disabling is not enough, because
+the data structure must also be protected from simultaneous access from
+other processers as well.  Using a semaphore can again lead to a deadlock,
+as for uni-processors.  If we use a spin lock, a similar situation can arise,
+where the interrupt handler is trying to acquire a spin lock that is held
+by the process in the context of which the interrupt handler is running.
+The solution is to acquire a spin lock <i>and</i> disable interrupts while
+accessing such a data structure.  Note that the interrupts cannot be
+disabled after acquiring the spin lock since the interrupt handler may
+start executing just after the spin lock has been taken.  Also we do not
+wish to keep interrupts disabled for as long as the current process needs
+to spin waiting for the lock to be free, since this is unnecessarily delaying
+interrupt service.  The solution is to repeatedly disable interrupts
+and restore interrupt level till the lock is gained.  This ensures that
+interrupts that arrive while the process is spinning are handled but that
+interrupts are disabled <i>before</i> actually getting the spin lock.
+The following piece of code illustrates the idea.
+<pre>
+spin_lock_disable_intr(int *lock) {
+    disable interrupts;
+    while (test-and-set(&lock)) {
+        restore interrupt level;
+        disable interrupts;
+    }
+}
+</pre>
+
+Note that since events are signaled from the interrupt handlers, both
+the ready queue and wait queues for events need to be protected in this
+manner.
+
+<p><a href="#content">Back to contents</a>       
+
+</body>
+</html>

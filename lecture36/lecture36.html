@@ -1,0 +1,223 @@
+<html><head><title>lecture34</title></head>
+
+<body background="bg3.gif">
+
+<a name="top"></a>
+<h2 align="center">
+Indexed allocation and some UNIX file system implementations
+</h2>
+
+<h3 align="center">
+Lecture- 34<br>
+Operating Systems (CS330)
+</h3>
+
+
+<p>
+<b>
+Lecturer: Deepak Gupta<br>
+Notes prepared by: Kiran Pandey<br>
+Lecture Date: November 8, 2004
+</b>
+</p>
+
+<hr>
+
+<p>
+<b>Contents
+</b>
+</p>
+
+<ul>
+<li><b><a href="#1">About this lecture</a><br>
+</b></li><li><b><a href="#2">Indexed allocation</a><br>
+</b></li><li><b><a href="#3">System V file system</a><br>
+</b></li><li><b><a href="#4">Fast File System(FFS)</a><br>
+</b></li><li><b><a href="#5">Related links and references</a>
+
+</b>
+
+<hr>
+
+<a name="1"></a>
+<p><b>About This Lecture</b><br>
+<br>
+In this lecture we first examine the indexed allocation method for allocating
+disk space We then look at the implementation of the System V file system.
+Finally, we begin with the Fast File System.</p>
+<a href="#top">Back to the top.</a>
+<hr>
+
+<a name="2"></a>
+
+<p><b>Indexed allocation:</b></p>
+<p>File systems in UNIX use indexed
+allocation to allocate disk space. Under this scheme, for each file, an array of  disk block
+addresses of the file is maintained. This array may be placed inside the file's
+inode or in a separate block called the index block of the file. The problem,
+however, is deciding upon a suitable size for this array. Any reasonable size
+will place a severe upper limit on possible file sizes. Again, statistically
+speaking, most files are very small, so a very large array will mean wastage of
+space. </p>
+
+<p align="center">
+<img src="wpe2.jpg">
+</p>
+
+<p align="center">
+Indexed allocation of disk space
+</p>
+
+
+<p>A better alternative is as follows:</p>
+
+<p>1. The first few (say 10) entries of the array (which is a
+part of the inode) are pointers to actual data
+blocks (i.e. direct blocks). If a file is small enough, it will need no more
+than the direct blocks. Assuming a block size of 4KB, all files of sizes 40 KB
+or less will fit within the direct blocks.</p>
+
+<p>2. The last few entries of the array are pointers to indirect
+blocks. Thus, in this case, the 11th entry would point to a single indirect
+block which is an array of disk block addresses. Suppose that a disk block
+address is 4 bytes long, then a 4 KB single indirect block can contain as many
+as 4KB/4bytes = 1024 disk block addresses. Thus a file can have up to 1024 + 10
+= 1034 data blocks, which means that the maximum file size is a little over 4 MB.</p>
+
+<p>3. To make even larger files possible, the next entry of the
+array (12th in this case) points to a double indirect block. The double indirect block contains
+the pointers to blocks that contain the pointers to actual data blocks. Now a
+file can have as many as 2<sup>20</sup> + 2<sup>10</sup>+ 10 = 1049610 data blocks, or a
+maximum size of a little over 4 GB.</p>
+
+<p>4. The next entry of the array in the inode points to a triple indirect block. With a
+triple indirect block, a maximum file size of 4TB is possible as a file may contain
+as many as 2<sup>30</sup> + 2<sup>20</sup> + 2<sup>10</sup> + 10 blocks.</p>
+
+<p>
+The number of blocks that can be addressed by 4 byte file
+pointers is only 2<sup>32</sup>, thus the file pointer size becomes a limiting factor as
+the maximum file size increases. As a result, many UNIX implementations, including
+Solaris and IBM's AIX, now support 64 bit file pointers.
+</p>
+
+<p align="center">
+<img src="wpe3.jpg">
+</p>
+
+<p align="center">
+The UNIX inode
+</p>
+
+<p>Under this scheme, as new blocks are allocated only when needed, there is economy
+of space. On the other hand, multiple disk accesses may be required to read a
+data block as the block containing its address has to be read first. For a file
+using double indirect blocks, as many as three disk accesses might be required
+to read a data block. However, it seems a reasonable overhead in exchange for
+provisioning for larger files.</p>
+
+<a href="#top">Back to the top.</a>
+
+<hr>
+
+<a name="3"></a>
+
+<p>
+<b>
+System V file system:
+</b>
+</p>
+
+
+<p>This was one of the earliest file systems to be used on UNIX.
+In this system, the disk is viewed as a sequence of blocks where a block is
+512 bytes large.
+</p>
+
+<p>
+The first block on the disk contains the boot loader code of
+the operating system.
+</p>
+
+<p>
+The next block is the super block which contains the following
+information about the disk: 1)number of data blocks on the disk 2)
+number of inodes on the disk 3) number of free data blocks 4) number of
+free inodes
+5) list of free inodes 6)  list of free data blocks. The lists of free
+inodes and free
+blocks are too large to fit inside a single block, so the fist few
+entries of the lists are maintained in
+the super block along with a pointer to the rest of the list.</p>
+
+<p>Next on the disk is a group of blocks containing the inodes.
+Given the inode number, an inode can be uniquely located on the disk. Since the
+number of blocks allotted for storing inodes is fixed, it places a limit on the
+number of inodes and hence the number of files the file system can have.</p>
+
+<p>The remaining blocks are data blocks which get allocated to files.</p>
+<p>This file system suffers from a number of drawbacks:</p>
+
+<p>1. In a new System V file system, the list of free blocks is
+sorted, so that blocks assigned to a file are contiguous or nearly so. As a
+result, a new system performs very well. However, over a period of time, as
+files get created and deleted, the list of free blocks gets scrambled and so, the
+blocks assigned to a file are randomly distributed with no optimization of
+seeks. As a result, performance worsens as the system gets older.</p>
+
+<p>2. The inode of a file is very widely separated from its data
+blocks. Thus accessing a file incurs a very long seek from the inode( which must
+be read first) to the file's data.</p>
+
+<p>3.In terms of reliability, this system has two major
+liabilities. The first is the super block which stores all the global
+information. Again, storing all the inodes close together might mean that if the
+surface on which they are all stored goes bad, all the data on the disk
+becomes inaccessible.</p>
+
+<p>4. Finally, the small block size, and hence the low disk
+bandwidth contributes to bad performance.</p>
+<p>Thus to improve performance, the following recommendations are
+made:</p>
+
+<p>1. For seek optimization, the inode of a file must be kept close to its
+data blocks which in turn must be as close together as possible, if not contiguous.</p>
+<p>2. A larger block size is to be preferred</p>
+<p>3. Multiple copies of critical data (the super block) must be maintained.</p>
+<p>4. Inodes must be widely distributed.</p>
+
+<a href="#top">Back to the top.</a>
+
+<hr>
+
+<a name="4"></a>
+
+<p><b>Fast File System:</b></p>
+<p>The Fast File System (FFS) implemented in 4.2 BSD addresses
+the above recommendations. Most file systems in use today are based on FFS.</p>
+<p>In the Fast File System, 4KB blocks are used, thus increasing
+the disk bandwidth. On the other hand, to avoid undue internal fragmentation due
+to large sized blocks, the file system allows the division of a single block
+into a number of fragments, each of which is addressable. The lower bound on the
+size of a fragment is the disk sector size( typically 512 bytes).</p>
+<p>Thus a 4K/1K FFS has a block size of 4KB and a fragment size
+of 1 KB. Thus, with respect to disk bandwidth, the system behaves as a system
+with 4KB block size would. With respect to internal fragmentation, it is as good
+as a system with 1 KB blocks with an average of .5K( half a fragment) wasted
+space per file instead of 2K( half a block).</p>
+<p>Further details of the Fast File System are examined in the next
+lecture.</p>
+<p><a href="#top">Back to the top.</a></p>
+<hr>
+
+<a name="5"></a>
+<p><b>Related links and references:</b></p>
+Silberschatz, Galvin, Gagne: Operating system concepts<br>
+McKusick et al: <a href="http://www.cs.princeton.edu/courses/%20archive/fall04/cos518/papers/ffs.pdf">A Fast File System for
+UNIX</a><br>
+Keith A. Smith and Margo Selzter, <a href="http://www.eecs.harvard.edu/%7Ekeith/papers/tr94.ps.gz"> File Layout and File System Performance.</a> Harvard Computer Science Technical Report TR-35-94.<br>
+<a href="#top">Back to the top.</a><br>
+
+<hr>
+
+</li></ul></body></html>

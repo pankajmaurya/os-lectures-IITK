@@ -1,0 +1,408 @@
+<html>
+<head>
+	<title>Lecture notes for CS330 (lecture - 21)</title>
+</head>
+<body text="#000000" link="#000000" vlink="#000000" background="..\bg3.gif">
+
+<center>
+<h2>
+Deadlock Avoidance and Deadlock Detection Algorithms
+<p>
+Lecture-21<br>
+Operating Systems (CS330)
+</h2>
+</center>
+
+<h4>
+Lecturer: Deepak Gupta<br>
+Notes prepared by: Saurabh Gupta (Y2348)<br>
+Lecture Date: September 18, 2004
+</h4>
+<p> 
+  <a name="Contents"> </a>
+</p><h4>
+Contents
+</h4>
+
+<ul>
+<li> <a href="#Topic1">About This Lecture </a> <br>
+</li><li> <a href="#Topic2">Deadlock Avoidance</a> <br>
+
+</li><li> <a href="#Topic3">Safe States, Unsafe States and Safe Sequences</a> <br>
+</li><li> <a href="#Topic4">Banker's Algorithm</a> <br>
+</li><li> <a href="#Topic5">Resource Allocation Graph Algorithm</a> <br>
+</li><li> <a href="#Topic6">Deadlock Detection and Recovery</a> <br>
+</li><li> <a href="#Topic7">User and Kernel Level Deadlocks</a> <br>
+</li></ul>
+
+<p>
+</p><hr>
+<a name="Topic1"> </a>
+<h3>About this lecture</h3>
+In the previous lecture we looked at deadlocks and deadlock prevention algorithms which
+ensured (by restraining how requests can be made) that one of the necessary conditions for
+deadlock cannot occur and thus prevented deadlocks. Low device utilization and reduced system
+throughput are some possible side effects of preventing deadlocks by this method.
+In this lecture we will study Deadlock avoidance and detection algorithms. 
+<p>
+<a href="#Contents">Back To Contents </a>
+</p><p>
+</p><hr>
+
+<a name="Topic2"> </a>
+
+<h3>Deadlock Avoidance</h3>
+In this deadlock handling technique, no particular discipline of resource 
+requests is expected from the program.  Instead, the resource
+allocator considers each request at runtime, and decides whether, if the
+requested resources are immediately granted (assuming of course that they
+are available), the system might <i>later</i> get into a deadlocked state.
+If the answer is yes, resources are not immediately granted and the requesting
+process is made to wait even though the resources are available.
+Thus the resource allocation algorithm always keeps the system in a 
+`safe' state.
+Such an algorithm, however, requires apriori information about what resources 
+a process may request and use in its lifetime.
+Various algorithms vary on the amount and type of information required. 
+The simplest and the most useful one is the model in which the maximum number 
+of resources of each type that may be needed by a process in its lifetime is 
+known apriori.  We will study the Banker's algorithm for deadlock avoidance
+which uses this this information.
+</p><p>
+<a href="#Contents">Back To Contents </a>
+</p><p>
+</p><hr>
+
+<a name="Topic3"> </a>
+<h3>Safe States, Unsafe States and Safe Sequences</h3>
+As discussed above, a deadlock avoidance algorithm characterizes system states 
+as safe and unsafe states, and then tries to keep the system always in a
+safe state.  Clearly, for this approach to be useful, the set of unsafe
+states must be a superset of the deadlocked states, so that deadlocks never
+occur in the system.  
+A safe state is not a deadlocked state. An unsafe state may or may not be
+a deadlocked state but it may lead to a deadlocked state.
+The relationship between safe, unsafe, and deadlocked state is depicted
+by the figure below.
+
+<p align="center">
+<img border="0" src="img182.png" width="269" height="163"></p>
+<p align="center"> <i>Safe, Unsafe and Deadlocked States</i>
+
+<p>
+One way to define safe states is as follows.
+The worst scenario is that in which each process requests for <i>all</i> the
+resources that it could possibly ask for.
+Now if in a state the system can allocate the maximum required resources to all
+processes in some order (and thus avoid a deadlock), then that state is a 
+<i>safe</i> state. To be more precise let us define
+the notion of a safe sequence.
+<p>
+<i>Safe Sequences</i> : A sequence of processes <P1, P2, ..., Pn> is a safe 
+sequence for the current state if the maximum resource requirement of any 
+P<i>i</i> can be satisfied by:
+<ul>
+<li> resources currently held by P<i>i</i>, <i>and</i>
+<li> resources currently available, <i>and</i>
+<li> resources held by all P<i>j</i>, where <i>j</i> < <i>i</i>.
+</ul>
+A state is safe if and only if there is a safe sequence for that state.
+If no such sequence exists then that state is said to be <i>unsafe</i>.
+Consider the following example.  Assume that the system has
+12 instances of a single resource type.  Assume that the
+maximum resource requirements and current allocations for different processes
+is as shown in the table below.
+
+<p>
+<table border=1>
+<tr>
+<td>Process</td><td>Max Requirement</td><td>Current Allocation</td></tr>
+<tr><td>P0</td><td>10</td><td>5</td></tr>
+<tr><td>P1</td><td>4</td><td>2</td></tr>
+<tr><td>P2</td><td>9</td><td>2</td></tr>
+</table>
+<p>
+Thus there are 3 instances of the resource currently available.
+Suppose, in this state, all three process request for the maximum
+number of resources that they are permitted to (5, 2, and 7 respectively).
+The system can satisy these requests as follows.  First P1 is given
+2 instances.  Since P1 now has all the resources it needs, it will
+ultimately finish and release all its resources.  At that stage
+the available resources would be 5.  Now P0 can be given the resources
+it needs.  When P0 finishes, there will be 10 resource instances available
+using which P2's requirement can be satisfied.  Thus, <P1, P0, P2> is a safe 
+sequence for this state, and hence this state is a safe state.
+
+<p>
+Suppose that in this state, P2 asks for and is granted one more instance
+of the resource.  The resulting state would be the following.
+<p>
+<table border=1>
+<tr>
+<td>Process</td><td>Max Requirement</td><td>Current Allocation</td></tr>
+<tr><td>P0</td><td>10</td><td>5</td></tr>
+<tr><td>P1</td><td>4</td><td>2</td></tr>
+<tr><td>P2</td><td>9</td><td>3</td></tr>
+</table>
+<p>
+Convince yourself that there is no safe sequence for this state, and hence
+this state is unsafe.  Therefore, the deadlock avoidance algorithm must
+<i>not</i> immediately satisfy this most recent request of P2 even though
+the requested resource is available.
+<p>
+<p>
+<a href="#Contents">Back to Contents </a>
+</p><p>
+</p><hr>
+
+<a name="Topic4"> </a>
+<h3>Banker's Algorithm</h3>
+We have already seen the basic ideas behind the Banker's algorithm above.
+We now state the algorithm more formally.  Essentially, when a request
+is made, the state that would result if the request is granted is computed 
+and checked for safety.  The request is granted only if the resulting state 
+is safe.
+
+<p>
+Let <i>n</i> be the number of processes in the system and 
+let <i>m</i> be the number of resource types.
+The following data structures are mainatained by the Banker's algorithm.
+<dl>
+<dt><tt>int available</tt>[<i>m</i>]
+<dd>A vector of length <i>m</i> indicating the number of available 
+resources of each type.  <tt>available</tt>[<i>j</i>] = <i>k</i> 
+implies that <i>k</i> instances of resource type <i>R<sub>j</sub></i> are 
+currently available.
+<dt><tt>int max</tt>[<i>n</i>,<i>m</i>]
+<dd>An <i>n</i> X <i>m</i> matrix defining the maximum resource
+requirement of each process.  <tt>max</tt>[<i>i</i>,<i>j</i>] = <i>k</i> 
+implies that process <i>P<sub>i</sub></i> can request at most <i>k</i> 
+instances of resource type <i>R<sub>j</sub></i>.
+<dt><tt>int allocation</tt>[<i>n</i>,<i>m</i>]
+<dd>An <i>n</i> X <i>m</i> matrix giving the current resource
+allocation of each process.  <tt>allocation</tt>[<i>i</i>,<i>j</i>] 
+= <i>k</i> implies that process <i>P<sub>i</sub></i> currently holds <i>k</i> 
+instances of resource type <i>R<sub>j</sub></i>.
+<dt><tt>int need</tt>[<i>n</i>,<i>m</i>] = <tt>max</tt> - 
+	<tt>allocation</tt>
+<dd>An <i>n</i> X <i>m</i> matrix indicating the remaining resource
+needs of each process.
+</dl>
+
+We now introduce some notation for ease of exposition.
+<p>
+Let <i>X</i> and <i>Y</i> be vectors of length <i>n</i>.
+<p>
+<i>X</i> &le; <i>Y</i> iff <i>X</i>[<i>i</i>] &le; <i>Y</i>[<i>i</i>] for all 
+<i>i</i> from  1 to <i>n</i>.
+<p>
+<i>X</i> < <i>Y</i> iff <i>X</i> &le; <i>Y</i> and <i>X</i> &ne; <i>Y</i>.
+<p>
+For a matrix <i>A</i>[<i>m</i>,<i>n</i>], <i>A<sub>i</sub></i> denotes the 
+<i>i</i><sup>th</sup> row of <i>A</i>.
+For example, <tt>allocation</tt><sub><i>i</i></sub> specifies the resources 
+currently allocated to process <i>P<sub>i</sub></i>.
+
+<p>
+<b>Overall Algorithm</b>
+<p>
+Let <i>R<sub>i</sub></i> (vector of size <i>m</i>) be the current 
+request made by <i>P<sub>i</sub></i>.
+
+<ol>
+<li>
+If <tt>need</tt><sub><i>i</i></sub> < <i>R<sub>i</sub></i> then 
+refuse the request.  Return
+<li>
+If <tt>available</tt><sub><i>i</i></sub> < <i>R<sub>i</sub></i> then 
+make <i>P<sub>i</sub></i> wait.  Return.
+<li>
+Compute the state that would result if <i>R<sub>i</sub></i> is granted as
+follows.
+<blockquote>
+	<tt>allocation</tt><sub><i>i</i></sub> = 
+		<tt>allocation</tt><sub><i>i</i></sub> + 
+			<i>R<sub>i</sub></i>;<br>
+	<tt>available</tt><sub><i>i</i></sub> = 
+		<tt>available</tt><sub><i>i</i></sub> - 
+		<i>R<sub>i</sub></i>;<br>
+	<tt>need</tt><sub><i>i</i></sub> = 
+		<tt>need</tt><sub><i>i</i></sub> - 
+		<i>R<sub>i</sub></i> ;
+</blockquote>
+If the computed state is safe (see safety algorithm below), grant the request 
+else make <i>P<sub>i</sub></i> wait and undo changes to the state.
+</ol>
+
+<b>Safety Algorithm</b>
+<p>
+Let <tt>Work</tt> and <tt>Finish</tt> be vectors of length of 
+length <i>m</i> and <i>n</i> respectively.
+<ol>
+<li>
+Initializations:
+<blockquote>
+<tt>Work</tt> = <tt>available</tt>;<br>
+For <i>i</i> from 1 to <i>n</i>, <tt>Finish</tt>[<i>i</i>] = false;
+</blockquote>
+<li>
+Find an <i>i</i> such that <tt>Finish</tt>[<i>i</i>] is false and 
+<tt>need</tt><sub><i>i</i></sub> &le; <tt>Work</tt>.
+If no such <i>i</i> exists goto step 4.
+<li>
+<tt>
+Work = Work + allocation<sub><i>i</i></sub>;
+Finish[i] = true;
+</tt>
+<br>
+goto step 2.
+<li>
+If <tt>Finish</tt>[<i>i</i>] is true for all 
+<i>i</i> from 1 to <i>n</i>, then the state is safe,
+else the state is unsafe.
+</ol>
+Note that due to the monotonically increasing value of the vector
+<tt>Work</tt>, we do not need any backtracking in the algorithm.
+<p>
+The Banker's algorithm handles multiple instances of resource types. 
+The algorithm has a complexity of <i>O</i>(<i>mn</i><sup>2</sup>).
+However, if every resource has a single instance, a faster algorithm can be 
+used (described below).<p>
+
+<a href="#Contents">Back To Contents </a>
+</p><p>
+</p><hr>
+
+<a name="Topic5"> </a>
+<h3>Deadlock Avoidance using Resource Allocation Graph</h3>
+If the system has only one instance of each resource type,
+a more efficient algorithm that uses a variant of the
+RAG can be used for deadlock avoidance.
+<p>
+Introduce a new type of edges called <i>claim edges</i> to the RAG. 
+A claim edge from <i>P<sub>i</sub></i> to <i>R<sub>j</sub></i> indicates that 
+process <i>P<sub>i</sub></i> may request resource <i>R<sub>j</sub></i> 
+at some time in future. Such edges are shown by dashed arrows. 
+When <i>P<sub>i</sub></i> actually requests resource <i>R<sub>j</sub></i>,
+the claim edge is converted to a request edge, and to an allocation edge
+on resource assignment. Similarly when a 
+resource <i>R<sub>j</sub></i> is released by process <i>P<sub>i</sub></i> 
+the assignment edge is reconverted to a claim edge. 
+Also, before any process starts executing, all its claim edges must already 
+be present in the RAG (denoting apriori knowledge of resource requirements
+of all processes).
+<p>
+Convince yourself that a state is unsafe if and only if the corresponding
+RAG has a cycle.  Thus when a process <i>P<sub>i</sub></i> requests 
+(available) resource <i>R<sub>j</sub></i>, its request is granted only if 
+on converting the claim edge to assignment edge does not result in the 
+formation of a cycle in the RAG.
+<p>
+As an example, consider the following RAG.
+ 
+<p align="center">
+<img border="0" src="img183.png" width="369" height="263"></p>
+
+This RAG has no cycles and represents a safe state since <P1, P2> is a 
+safe sequence for the state.
+Now suppose that P2 requests R2. In spite of R2 being free it cannot
+be allocated to P2 since this action would create a cycle in the graph and
+hence would result in an unsafe state.
+
+<p>
+<a href="#Contents">Back To Contents </a>
+</p><p>
+</p><hr>
+
+<a name="Topic6"> </a>
+
+<h3>Deadlock Detection and Recovery</h3>
+If a system neither employs deadlock prevention nor deadlock avoidance, 
+a deadlock may occur.  In this case, the only possible way to deal with
+a deadlock is to detect it after it has occurred and try to recover
+from it.  Here is a deadlock detection algorithm.  Note that the
+deadlock detection algorithm is similar to the Banker's algorithm
+except that it works with the current resource requests of each
+process (<i>R<sub>i</sub></i>) instead of its maximum possible request
+(<tt>need</tt><sub><i>i</i></sub>).
+
+<p>
+<b>Deadlock Detection Algorithm</b>
+<ol>
+<li>
+Initialization:
+<blockquote>
+   <tt>Work</tt> = <tt>available</tt>; <br>
+   For all <i>i</i> from 1 to <i>n</i>, <tt>Finish</tt>[<i>i</i>] = 
+	(<tt>allocation</tt><sub><i>i</i></sub> == 0 );
+</blockquote>
+<li>
+Find an <i>i</i> such that <tt>Finish</tt>[<i>i</i>] is false and 
+<i>R<sub>i</sub></i> &le; <tt>Work</tt>[<i>i</i>].
+   If no such <i>i</i> exists goto step 4.
+<li>
+<tt>Finish</tt>[<i>i</i>] = false;
+<tt>Work</tt> = <tt>Work</tt> + <tt>allocation</tt><sub><i>i</i></sub>;
+<br>
+goto step 2
+<li>
+If <tt>finish</tt>[<i>i</i>] is true for all <i>i</i> from 1 to <i>n</i>,
+there is no deadlock, else there is a deadlock, and all processes
+<i>P<sub>i</sub></i> for which <tt>finish</tt>[<i>i</i>] is false
+are involved in the deadlock.
+</ol>
+
+The complexity of this deadlock detection algorithm is again
+<i>O</i>(<i>mn</i><sup>2</sup>).  Again, if there is only one
+instance of every resource, a simpler algorithm can be used ---
+a state is deadlocked if and only if the corresponding RAG
+(without the claim edges) has a cycle.
+
+<b>Deadlock Recovery</b><p>
+Using a deadlock detection scheme to deal with deadlocks involves
+tricky issues with no easy answers.  For example, how often should
+the deadlock detection algorithm be run?  If it is run too frequently,
+it would result in a large overhead.  On the other hand, deadlocks
+that go undetected for large periods of time are clearly undesirable
+since they lead to wastage of resources.  For recovering from a 
+deadlock, the only options are: to kill some processes, or to 
+forcibly take away some resources from some processes.  For some
+resources, the latter may not be feasible.  If one chooses to
+kill some processes, the decision may be made on the basis of
+process priorities etc.
+
+<p>
+<a href="#Contents">Back To Contents </a>
+</p><p>
+</p><hr>
+<a name="Topic7"> </a>
+<h3>Deadlock Handling in Practice</h3>
+In practice, deadlock avoidance has too high a runtime overhead
+to be practical.  Deadlock detection, besides being expensive,
+has other practical problems mentioned above.  Deadlock prevention,
+therefore, is the most practical approach to handling deadlocks.
+<p>
+Since the kernel also executes concurrently on behalf of multiple
+processes that share several resources, deadlocks are an area of
+concern in kernel design as well.  From the point of view of the
+kernel, resource requests can be of two kinds: those that are
+explicitly made by user processes, such as requests to lock a
+file, access a device in exclusive mode etc.; and those that the
+kernel code makes on behalf of user processes in order to provide
+services to these processes.  Examples of the latter include
+various kernel locks etc., used by the kernel for synchronization
+purposes.  Generally, deadlocks caused due to the first kind of
+resource requests are considered application responsibility, and
+the kernel makes no guarantees that deadlocks will not occur.
+Potential deadlocks due to the second kind of resource requests
+are, however, clearly the responsibility of the kernel, and the
+kernel code must ensure that such deadlocks do not occur.
+Usually, some deadlock prevention techniques are used to ensure
+this.
+
+<p>
+<a href="#Contents">Back To Contents </a>
+</p><p>
+</p><hr>
+</body>
+</html>

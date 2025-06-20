@@ -1,0 +1,233 @@
+<html>
+<head>
+<title>Lecture notes for CS330 (lecture - 24)</title>
+<!--
+	replace n above by the lecture number
+-->
+</head>
+<body text="#000000" link="#000000" vlink="#000000" background="..\bg3.gif">
+<center>
+<h2>
+CPU Scheduling (3) 
+<p>
+Lecture-24<br>
+Operating Systems (CS330)
+</h2>
+</center>
+
+<h4>
+Lecturer: Deepak Gupta<br>
+Notes prepared by: Nihit Purwar<br>
+Lecture Date: September 23, 2004
+</h4>
+
+<h4><a name=content></a>Contents</h4>
+
+<ul> 
+ <li> <a href="#intro">Introduction to the Lecture</a> </li>
+ <li> <a href="#real">Real Time Scheduling</a> </li>
+ <li> <a href="#priority">Priority Inversion</a> </li>
+ <li> <a href="#simple">Simple Priority Inheritance Protocol</a> </li>
+<li> <a href="#multi">Multi-processor Scheduling</a> </li>
+<li> <a href="#algo">Algorithm Evaluation</a> </li>
+</ul>
+<hr>
+<a name=intro>
+<h4>Introduction
+</h4>
+In this lecture we will study scheduling issues in real-time systems. 
+We will also have examine some issues in multiprocessor scheduling. 
+Finally we will study ways in which scheduling algorithms can be evaluated.
+<p></p><a href="#content">Back to Contents</a> <p></p>
+<hr>
+
+<h4><a name=real>
+Real Time Scheduling :</h4>
+<p>A real-time system is one in which the response to an input must be produced
+within a specified time of the input becoming available.  This time limit is
+called a <i>deadline</i>.  Thus, not only must the outputs be correct but also
+timely, in order for the system to behave as per specifications.
+Real-time systems are widely used in control applications that are often
+safety critical.  Such systems typically employ dedicated embedded systems
+for control.  However, some general purpose operating systems also support
+real-time applications (to varying extents).  Depending on how critical is
+it to meet the deadline, real-time systems are often classified as hard,
+and soft real-time systems.
+<dl>
+<dt>Hard real-time systems
+<dd>
+Here, meeting <i>every</i> deadline is critical; the system fails if even one
+deadline is ever missed.  Control systems are usually hard real-time systems.
+<dt>Soft real-time systems
+<dd>
+Here, missing a deadline occassionally is tolerable, as long as it does not
+happen too often.  Multi-media applications (such as a movie player) are
+common examples of soft real-time applications.
+</dl>
+It should be clear that the main requirement for a real-time system
+is that the response time must be bounded and predictable, and preferably,
+small.  From the scheduling perspective, this means that a real-time process
+must start running within a short, bounded, and predictable time of being made
+runnable (i.e., woken up).  This period is called the <i>dispatch latency</i>
+for the process.  Note that this implies that preemptible kernels are more
+suited for such applications than non-preemptible ones. (why?)
+<p>
+A typical real-time application consists of a number of processes (or threads)
+each with its own deadline and processing time requirements.  The scheduling
+strategy should ensure that each of these processes always meets its deadlines.
+<p>
+A vast amount of research has been conducted on scheduling of real-time
+processes.  The most common and practical scheduling scheme is to assign
+static priorities to real-time processes that are greater than the maximum 
+priority that any non-realtime process may ever get.  Static here implies that
+priorities for real-time processes should not change based on their CPU usage
+or other characteristics.  The problem here is to determine how to assign
+relative priorities to the various real-time processes so that all of them
+always meet their deadlines.
+<p>
+A celebrated result in real-time scheduling theory in this context is that a 
+priority assignment that gives higher priorities to processes with smaller
+(tighter) deadlines (rate monotonic scheduling) is provably optimal.
+<p>
+Solaris supports a realtime process class as mentioned earlier.  The
+<i>priocntl</i> system call can be used to set the scheduling class and the
+priority of a process.  Note that the fact that the Solaris kernel is
+preemptible, and the fact that a higher priority process immediately preempts
+a lower priority process on waking up ensure a bounded dispatch
+latency for real-time processes.
+
+<p>
+<a href="#content">Back to Contents</a>
+<p>
+<hr>
+<h4><a name=priority>Priority Inversion</h4>	
+
+A common problem with using static priority scheduling for real-time processes
+arises when such processes share resources (such as mutexes).  
+Consider the situation shown in the figure below.  Here P1 has the highest
+priority, P3 the lowest, and P2 has an intermediate priority.
+Initially, only P3 is runnable.  While running, it acquires a lock L.
+Now, P1 becomes runnable and preempts P3.  After sometime P1 needs L
+which is held by P3, hence P1 blocks and P3 resumes.  However, after
+some time, P2 becomes runnable and preempts P3.  At this point, P1 is
+waiting for P2 to give up the processor (so that P3 can run and release
+L) even though P1 and P2 do not share any locks.  This phenomenon is called
+<i>priority inversion</i>.
+<p>
+<center><img src = "prio.bmp">
+</center>
+<p>
+If the response time for P1 in such situations is to be predicted, one
+must clearly be able to predict a bound on the time for which it may
+need to wait for a lower priority process (P2 or P3).  If suitable 
+techniques are not employed,  this time may be unbounded.  Consider the
+above example again but assume that there is another process P2' at the
+same priority level as P2.  It is possible that P2 and P2' keep executing
+alternately, never allowing P3 to run, and thus causing P1 to block
+indefinitely.
+<p>
+One can observe that this problem can be solved if P3 is ``lent'' P1's 
+priority while it holds L.  This seems reasonable since while P3 holds L,
+it is doing a computation that is critical if P1 is to meet its deadline.
+Such a scheme is called a <i>priority inheritance scheme</i>.  Many
+priority inheritance protocols have been proposed in the literature.
+These differ in how and when priorities are inherited, and in the worst
+case bounds on the blocking times of processes.
+We now describe a simple priority inheritance protocol.
+
+<p>
+<a href="#content">Back to Contents</a>
+<h4><a name=simple>
+Simple Priority Inheritance Protocol</h4>
+
+When a higher priority process blocks for a lower priority process, the lower 
+priority process inherits the priority of higher priority process.
+Priority inheritance is transitive.  Thus, at any given point in time, the
+effective priority of a process is the highest of the effective priorities of
+all processes directly or indirectly blocked by it and its own base priority.
+It can be shown that with this protocol in force, the worst case blocking time
+of a process (time for which the process may be blocked by <i>lower</i>
+priority tasks) is bounded and predictable (in terms of durations of critical
+sections of various processes).
+<p>
+In the example shown earlier, if priority inheritance were to be used,
+P3 would inherit P1's priority when P1 blocks for L.  Hence P2 would not
+be able to preempt P3.  The worst case blocking time for P1 (and P2) would thus
+be the duration of P3's critical section.
+<p>
+The figure below shows another example situation and how the effective 
+priority of a specific process change over time in this scenario when the
+simple priority inheritance protocol is used.
+<p><center><img src = "simple.bmp"></center>
+
+<p>
+<a href="#content">Back to Contents</a>
+<p>
+<hr>
+<h4><a name=multi>
+Multi-processor Scheduling</h4>
+<p>
+So far we have been considering only single processor systems from the point
+of view of CPU scheduling.  
+If the computer system has multiple processors, scheduling is naturally more
+complex.  In SMP systems, the simplest scheduling scheme is to have a single
+ready queue shared by all processors.  Scheduling is performed independently
+on all processors.  Whenever scheduling occurs on any processor, the most
+eligible process from the ready queue is chosen for execution as per the
+scheduling algorithm.  Of course, access to the ready queue needs to be 
+synchronized. (how?)  This approach to multi-processor scheduling has the
+advantage of automatic load balancing: no processor can be idle if there are
+runnable processes (though this requires some additional mechanisms to ensure
+this, think about what is required).
+<p>
+With this <i>self scheduling</i> approach, only minor changes are required to
+the scheduling strategies that we have studied earlier for uni-processors.
+For example, it is usually a good idea to give a slightly higher preference to
+a process that last ran on the same processor, in the hope of a warm cache.
+This notion is called <i>processor affinity</i>.
+<p>
+Some operating systems (Linux, Solaris, for example) allow threads to be
+<i>bound</i> to processors.  This instructs the scheduler to always execute
+the specified thread on the processor to which it is bound.
+Processor binding can help achieve good performance in compute
+intensive parallel applications.  Solaris also allows binding a thread or a
+set of threads to a specified subset of processors.
+<p>
+<a href="#content">Back to Contents</a>
+<p></p>
+<hr>
+<h4><a name=algo>Algorithm Evaluation:</h4>
+<p>How do we select a scheduling algorithm for a particular system? There are 
+many scheduling algorithms with many parameters and therefore selecting one of 
+them can be quite difficult. The first problem is defining the criteria and 
+selecting an algorithm. Criteria are often defined in terms of CPU utilization, 
+response time, or throughput. Once the evaluation criteria are defined, we 
+need to 
+evaluate the various algorithms under consideration. Some of the ways for 
+evaluating algorithms are:
+<ul>
+<li>Analytic</li>
+<ul><li>Deterministic</li><li>Queuing Models</li></ul>
+<li>Simulations</li>
+<li>Actual Implementation</li>
+</ul>
+<p>In deterministic, analytic evaluation, one simply finds the values of the various 
+performance measures for a given set of processes, with known arrival and burst 
+times etc. Clearly the results do not necessarily hold in general and thus the 
+utility of this technique is very limited. It is used mostly only to understand 
+the algorithms. 
+<p>In a queuing model approach, one assumes a known arrival pattern (i.e., 
+probability distribution of the inter-arrival times) and service time (CPU 
+burst) distribution and analytically tries to obtain the average values of the 
+various performance measures. Unfortunately, only a few probability 
+distributions and scheduling disciplines can be analyzed in this manner. <p>
+With simulations, clearly arbitrary probability distribution can be handled. 
+However there is no clear agreement as to what probability distributions 
+actually model the user behavior. 
+<p>The most accurate way of analyzing the performance of an algorithm is clearly to actually implement it in an OS and 
+release it to the users. However this is clearly an expensive approach. <br>
+</p><a href="#content">Back to Contents</a>
+<p>
+<hr>
+</body>
+</html>

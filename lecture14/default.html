@@ -1,0 +1,279 @@
+<html>
+<head>
+<title>Lecture notes for CS330 (lecture - 14)</title>
+<!--
+	replace n above by the lecture number
+-->
+</head>
+<body text="#000000" link="#000000" vlink="#000000" background="..\bg3.gif">
+<center>
+<h2>
+Classical Algorithms for Mutual Exclusion
+<p>
+Lecture-15<br>
+Operating Systems (CS330)
+</h2>
+</center>
+
+<h4>
+Lecturer: Deepak Gupta<br>
+Notes prepared by: Nitesh Kumar<br>
+Lecture Date: September 4th, 2004
+</h4>
+
+
+<a name="content"></a>
+<h4>Contents</h4>
+<ul>
+<li><a href="#two">Two Process Solution</a>
+<li><a href="#bakery">Bakery Algorithm</a>
+</ul>
+
+In this lecture, we discuss some classical algorithms for solving the
+mutual exclusion problem.  All these solutions assume that a single
+read or a single write to a memory location executes atomically with
+respect to concurrent accesses to the same memory location.  This is
+a reasonable assumption since it holds for both uni-processors and 
+multi-processors.  We first try to come up with a solution for the
+simpler version of the problem that involves just two processes.  Then
+we see the <i>bakery algorithm</i> that solves the problem for any
+number of processes.
+<p>
+<a name="two"></a>
+<h4>
+Two Process Solution
+</h4>
+We assume two processes: P<sub>0</sub>, and P<sub>1</sub>.
+In the following algorithms, one or more of the following shared
+variables are used.
+<ul>
+<li><tt>boolean flag[2]</tt> initialized to all false.
+<li><tt>int turn</tt> initialized to 0 or 1.
+</ul>
+<tt>i</tt>, and <tt>j</tt> are assumed to be local variables in each process, 
+with values 0 and 1 respectively in process P<sub>0</sub>, 
+and 1 and 0 respectively in process P<sub>1</sub>.
+<p>
+<b>Solution 1:</b> Whenever a process P<sub>i</sub> wishes to enter the 
+critical section, it sets flag[i] to true, and on exiting the critical
+section, sets it back to false.   Thus flag[i] represents whether or not
+process P<sub>i</sub> wishes to enter the critical section (or is already
+in the critical section).  
+Clearly, the process should check if the other flag is false while entering 
+to ensure mutual exclusion.  Thus, a process P<sub>i</sub> executes the
+following code.
+<pre>
+		P<sub>i</sub>:
+		while (1) {
+		 	non-critical code
+			------------------
+			flag[i] = true; // Notification of intent to enter critical code.
+			while(flag[j]); // Do nothing till other process's flag is set.
+			------------------
+			critical code
+			------------------
+			flag[i] = false; // While exiting, setting flag to false.
+			-------------------
+			non-critical code
+		}
+</pre>
+We verify whether the solution satisfies the three properties: <br>
+<ol>
+<li>Mutual Exclusion : If process P<sub>i</sub> is in critical section, flag[i] is set and so, P<sub>j</sub> cannot be in the
+critical section. Since, the two processes can never be in the critical section together, this property is satisfied by the
+solution.
+<li>Progress : Suppose P<sub>i</sub> is running and `flag[i] = true;' is 
+executed. Then a context switch occurs and `flag[j] = true' is executed by
+P<sub>j</sub>. Now both the flags are set and so the code in the next line 
+`while(flag[j]);' keeps on executing in both the processes. 
+So, the decision process will take an infinite amount of time in this case,
+and thus, this solution does not satisfy the progress property.
+<li>Bounded Wait : If P<sub>i</sub> notifies its intent of entering the 
+critical section by setting flag[i], P<sub>j</sub>
+cannot enter the critical section again as it is stopped from entering the 
+code again by the loop 'while(flag[i]);'. 
+So, after notification of will
+to enter, the other process cannot enter the critical section an unbounded 
+number of times, and hence the solution satisfies the bounded wait property.
+</ol>
+
+<b>Solution 2: </b> We allow the processes to enter the critical section o
+ne-by-one by using the <tt>turn</tt> variable to indicate whose turn it is
+next to enter the critical section.
+We keep on flipping this variable to allow both processes in the critical
+section one-by-one.
+<pre>
+		P<sub>i</sub>:
+		while (1) {
+		 	non-critical code
+			-----------------
+			while( turn != i); // If it is not i's turn then wait. 
+                                           // Otherwise, enter the critical section.
+			-----------------
+			critical code
+			-----------------
+			turn = 1 - i;      // Now the turn is of the other process.
+			-----------------
+			non-critical code
+		}
+</pre>
+
+As before we verify the properties for this solution. 
+<ol>
+<li><b>Mutual Exclusion</b> : When P<sub>i</sub> is in critical section, 
+turn = i.  So, P<sub>j</sub> cannot be in the critical section.
+Hence, this solution satisfies the mutual exclusion property.
+<li><b>Progress</b> : Let turn be i, i.e., it is process P<sub>i</sub>'s 
+turn to 
+enter.  But even if P<sub>i</sub> does not wish to enter the critical section
+and only P<sub>j</sub> does, the latter still cannot enter the critical
+section since it is not P<sub>j</sub>'s turn.  
+non-critical section. Now, if P<sub>j</sub> intends to enter, it can't do so as will have to wait till turn gets equal to j.
+Thus, a process that does not want to enter the critical section 
+is preventing another process from doing so.
+So, this solution does not satisfy the progress property.
+<li><b>Bounded Wait</b> : Both processes enter the critical section one-by-one. So, P<sub>j</sub> can enter at most only once between
+P<sub>i</sub>'s notification of intent and entering the crtical section. So, bounded wait is satisfied by this solution.
+</ol>
+
+<b>Solution 3: </b> To eliminate the problems of the above two solutions, 
+we combine key ideas of both.  Here, a process P<sub>i</sub> can enter the 
+critical section if either it is P<sub>i</sub>'s turn or if it is 
+P<sub>j</sub>'s turn but P<sub>j</sub> does not want to enter the critical 
+section (flag[j] is false).
+<pre>
+			P<sub>i</sub>:
+			while (1) {
+			 	non-critical code
+				---------------------------
+				flag[i] = true; turn = j; // Notification of intent
+				while(flag[j] && turn == j); //Waiting 
+				----------------------------
+				critical code
+				----------------------------
+				flag[i] = false;
+				----------------------------
+				non-critical code
+			}
+</pre>
+<ol>
+<li>Mutual Exculsion : If P<sub>0</sub> is in the critical section, 
+flag[0] is set, and either flag[1] is false or turn = 0.
+If flag[1] is false, P<sub>1</sub> is clearly not in the critical section. 
+If turn = 0, then too P<sub>1</sub> cannot be in the critical section as both 
+flag[0] and (turn = 0) are true.
+Similar is the case when P<sub>0</sub> is in the critical section. 
+Thus this solution satisfies the mutual exclusion property.
+<li>Progress : Clearly, if P<sub>i</sub> does not want to enter, 
+flag[i] will be false and so, P<sub>j</sub> can enter the critical
+section immediately. To show that the decision process always
+takes a bounded time, we assume that both the processes are interleaved in 
+such a way that flag[0] and flag[1] are both set to true. 
+But then, turn can be either equal to 0 or 1. So, one of the processes will 
+clearly exit the loop 'while(flag[j] && turn == j)' and so, 
+the decision process can be completed in bounded amount of time.
+Thus, this solution also satisfies the progress property.
+<li>Bounded Wait : If P<sub>i</sub> is waiting for a chance to enter the 
+critical section, P<sub>j</sub> can only enter once before P<sub>i</sub> 
+enters the 
+critical section. This is so because flag[i] is set due to P<sub>i</sub>'s 
+notification. If P<sub>j</sub> wants to
+reenter then it sets turn = i and so it gets caught in the loop 
+`while(flag[i] && turn ==i)' and cannot reenter till P<sub>i</sub>
+enters and exits the critical code. So, the other process can enter at most once between notification of intent and entering
+the critical section and thus, this solution satisfies 
+the bounded wait property.
+</ol>
+
+Thus, we finally have a correct solution to the critical problem that meets
+all the three requirements. The same solution can be extended  (non-trivially)
+for the case of multiple processes. 
+But, we examine a different solution to this problem called the
+<i>Bakery Algorithm</i>
+<p>
+
+
+<a href="#content"> Back to Contents</a>
+<a name="bakery"></a>
+<h4>
+Bakery Algorithm
+</h4>
+Here the processes are served the same way as customers in a bakery, 
+hence the name. Every process is given a token number and the process 
+with minimum token number is served first. When a process P<sub>i</sub> 
+shows its will to enter by executing the entry code, it is assigned the
+following token number: (we assume that there are a total of n processes)
+t<sub>i</sub> = max(t<sub>1</sub>,t<sub>2</sub>...t<sub>n</sub>) + 1;
+
+<p>
+We can see that finding the maximum value of previous tokens is not an 
+atomic statement and will be executed in many steps. 
+So, if two processes start this calculation at the same time, they may get the 
+same token number. To resolve such ties, the rule adopted is that among 
+processes with the same token number, the lower numbered process will be
+served first.
+<p>
+To express this idea precisely, define the relation &lt; as follows.
+
+(i, t<sub>i</sub>) &lt; (j, t<sub>j</sub>) iff 
+	t<sub>i</sub> &lt; t<sub>j</sub> or
+	(t<sub>i</sub> = t<sub>j</sub> and i &lt; j) <br>
+
+Thus the relation &lt; defines a total order on the pairs (i, t<sub>i</sub>).
+Now if both P<sub>i</sub> and P<sub>j</sub> want to enter the critical section
+at the same time, P<sub>i</sub> will be allowed to enter first
+if (i, t<sub>i</sub>) &lt; (j, t<sub>j</sub>); otherwise P<sub>j</sub>
+will be allowed to enter first.
+<p>
+Processes which do not want to enter the critical section are given token 
+number 0. A process enters the critical section
+only if all other processes have token numbers 0 or 
+more than that of this process. 
+We also use a variable 'choosing' for each
+process which is true when this process is choosing the token and false when 
+it is done choosing. This is done so that we have 
+all processes finished choosing while finding the one with least token number.
+The final code is the following.
+<pre>
+		P<sub>i</sub>:
+		while (1) {
+			non-critical code
+			-----------------
+			choosing[i] = true; // The process is choosing the token now.
+			token[i] = max(token[1], token[2], ..., token[n]) + 1;
+			choosing[i] = false; // Choosing complete
+			for j = 1 to n except i do { //Compare with all other processes
+			 	while(choosing[j]); // Wait till the process is finished choosing
+				while(token[j] &ne; 0 and ((j, token[j]) &lt; (i, token[i])));
+					// If there is another process with lesser token, then wait.
+			}
+			--------------------
+			critical code
+			--------------------
+			token[i] = 0; // Set token number to 0 as this process has left the critical section
+			--------------------
+			non-critical code
+		}
+</pre>
+Now we check if this solution satisfies the properties:
+<ol>
+<li>Mutual Exclusion : If process P<sub>i</sub> is running its critical code, then all other processes have token numbers 0 or greater than
+token[i]. This is so because P<sub>i</sub> checks so before entering the critical section and also, any new process will have token number greater
+than token[i]. So, no other process can enter till P<sub>i</sub> exits and token[i] is assigned to 0. Thus, this solution
+satisfies mutual exclusion.
+<li>Progress : If some process does not want to enter the critical section, 
+its token number is 0 and so, it does not
+prevent other processes from entering the critical section. 
+Also, the decision process will take finite amount of time as there
+is a total order on (i, t<sub>i</sub>) and so, the minimum of them 
+will be found in finite time and this process that has the minimum value
+is allowed to run. Note also the choosing[i] is true only for a finite time.
+So, the solution satisfies the progress property.
+<li>Bounded Wait : After a process P<sub>i</sub> gets a token number, some other process can enter only once before P<sub>i</sub>
+gets the chance. This is so, because if the other process wants to reenter, it will be given a higher token number and so, can 
+enter after P<sub>i</sub>. So, bounded wait is satisfied too.
+</ol>
+So, this solution too is a correct solution satisfying all the three requirements.
+
+</body>
+</html>

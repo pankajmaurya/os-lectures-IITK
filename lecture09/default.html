@@ -1,0 +1,253 @@
+<html>
+<head>
+<title>Lecture notes for CS330 (lecture - 9)</title>
+
+</head>
+<body text="#000000" link="#000000" vlink="#000000" background="..\bg3.gif">
+
+<center>
+<h2>
+Exit, Wait Calls, IPC
+<p>
+Lecture-9<br>
+Operating Systems (CS330)
+</h2>
+</center>
+
+<h4>
+Lecturer: Deepak Gupta<br>
+Notes prepared by: Peeyush Jain<br>
+Lecture Date: August 19, 2004
+</h4>
+
+<p>
+<br>
+<a name = "Contents"> </a>
+<h4>
+Contents
+</h4>
+<ul>
+<li> <a href = "#exit">exit call</a> <br>
+<li> <a href = "#wait">wait call</a> <br>
+<li> <a href = "#Topic4">Unix Process Hierarchy </a> <br>
+<li> <a href = "#Topic5">Inter-process Communication </a> <br>
+<li> <a href = "#Topic6">IPC Mechanisms</a> <br>
+<li> <a href = "#messagepassing">Message Passing</a> <br>
+
+</ul>
+<p>
+<hr>
+<a name = "exit"> </a>
+<h4>
+Exit System Call
+</h4>
+</a>
+A process can terminate itself by calling the <i>exit</i> system call.
+The parameter for the call is an integer (called the exit status).  The
+exit status of a process can be found out by its parent process (see
+<i>wait</i> call below.  By convention, an exit status of 0 means
+successful termination while a non-zero exit status means termination
+because of some error.
+<p>
+When a process calls the exit system call, most resources held by the
+process are released.  For example, all areas of physical memory allocated 
+to the process are freed, its address translation tables are deallocated,
+all open files are closed etc.  Only a minimal information about the process,
+such as its exit status, resource usage information etc., is retained
+in its process control block till the parent of this process collects
+this information.  Finally the process enters the <i>Zombie</i> state
+and calls the scheduler to give up the CPU to some other process.
+<p>
+A process may also terminate due to the receipt of a signal.  We shall
+look at signals in more detail in a later lecture.
+
+<p>
+<a href = "#Contents">Back To Contents </a>
+<p>
+<a name = "wait"> </a>
+<h4>
+Wait system call
+</h4>
+The <i>wait</i> system call is used by a parent process to wait for the
+termination of a (any) child process.  The calling process returns with
+an error if it has no child processes, immediately if it has some child
+process that is already in the zombie state, and blocks (till a child
+process terminates) otherwise.  The argument to the wait call is a pointer
+to an integer variable that will be set (by the kernel) with a status word
+that gives information
+about the terminated child process.  The return value is the pid of this
+``collected'' child process.
+<p>
+The status word returned by the wait call encodes information about how
+the child terminated (exit call or signal receipt) and exit status or the
+signal that caused termination.  The following macros can be used for
+decoding this information.  See the manual pages for more information.
+<ul>
+<li>
+<tt>WIFEXITED(status)</tt> - returns true if the child process used the exit 
+call to terminate.
+<li>
+<tt>WEXITSTATUS(status)</tt> - returns the exit status of the child (if it
+exited).
+</ul>
+Once information about a zombie process has been collected by its parent
+in this manner, all retained information about the process is discarded 
+by the kernel.
+<p>
+There are some more system calls like wait3, wait4 etc., that allow a process
+to wait for a specified child process etc.  See the manual pages for details.
+
+<p>
+<a href = "#Contents">Back To Contents </a>
+
+<hr>
+<a name = "Topic4"> </a>
+<h4>
+Unix Process Hierarchy
+</h4>
+<center>
+<img src="uph.gif">
+</center>
+<p>
+In Unix, at boot time, after performing initialization, the kernel
+``handcrafts'' a process and execute the <i>init</i> program in this
+process.  This process is the only one that is not created using the
+fork call and has no parent.  The init program creates a <i>getty</i> process
+(i.e., forks and execs the getty program in the child process) for each
+terminal on the system.  The getty program prints a login prompt and waits
+for a login name to be typed.  When the user types a login name, the getty
+process execs the login program which reads the password, authenticate it,
+and if the authentication is successful, it execs the login shell of the
+user.  Note that the process running the login shell is a child of the
+init process.  When this process exits, init (which was waiting for this
+to happen) creates another getty process for the terminal.
+<p>
+Also, the kernel makes the init process the parent of any process whose parent
+terminates.  Since the init program keeps waiting for its child processes to
+die, no process can remain zombie for ever.
+
+<p>
+<a href = "#Contents">Back To Contents </a>
+<hr>
+<a name = "Topic5"> </a>
+<h4>
+Inter-Process Communication
+</h4>
+An application, at runtime, may create several processes that ``cooperate''
+to perform the application functionality.  These processes may be running
+the same program or different programs (all part of the overall application)
+depending on the application requirement.  Such an architecture may be
+used by the application developer for modularity or for concurrency.
+For example, the C compiler typically uses several processes to achieve
+the final translation of a C program into an executable binary.  Each of
+these processes handles a different phase of compilation, such as 
+preprocessing, translation from C to assembly, assembling, linking etc.
+Splitting the entire compiler application into multiple processes in this
+manner gives a lot of modularity and flexibility to the application.
+As another example, an HTTP server may create several processes to handle
+multiple HTTP requests concurrently.  In this case, all these processes
+would be running the same program but working with different data.
+Note that concurrency is possible even on a uniprocessor machine because
+I/O and computation can proceed in parallel.
+<p>
+Such an application that consists of several processes that need to 
+cooperate with each other needs, in general, facilities for:
+communication (data sharing), and synchronization (coordination of activities) 
+among the constituent processes.  Operating systems typically provide
+several primitives for such inter-process communication.
+
+<p>
+<a href = "#Contents">Back To Contents </a>
+
+<hr>
+<a name = "Topic6"> </a>
+<h4>
+IPC Mechanisms
+</h4>
+There are two main categories of IPC mechanisms: message passing based
+communication, and shared memory based mechanisms.
+<p>
+In message passing, as the name suggests, the processes can send arbitrary
+messages to each other.  Note that message passing typically achieves goals
+of both communication and synchronization simultaneously, since the receipt
+of a message indicates something about the state of the sender.
+<p>
+In shared memory communication, two or more processes share some part
+of their virtual address spaces.  That is, the same area of physical memory
+is mapped to the address spaces of each of the processes (at the same or
+different virtual addresses).  Thus communication is natural here, since
+if a process modifies a shared memory location, the change is visible to
+all other processes that share this memory location.  However, with shared
+memory, we require additional synchronization primitives to ensure that
+inconsistencies do not arise due, for example, to multiple processes attempting
+to write different values to the same memory location at about the same
+time.  We shall look at these synchronization issues later in the course 
+when we discuss threads.
+<p>
+Originally, shared memory among processes was first implemented in the
+System V flavour of Unix.  But now, it is available in most Unix flavours
+including Linux.  The system call for setting up shared memory in such
+systems is the <i>shmget</i> system call.  See the manual page for more
+details.
+<p>
+It is also possible to implement higher level abstract ways of IPC
+by building upon message passing.  Remote Procedure Calls and 
+Remote Object Calls (e.g. RMI in Java) are examples of these.
+<p>
+<a href = "#contents">Back To Contents </a>
+<p>
+<hr>
+<a name="messagepassing"></a>
+<h4>Message Passing</h4>
+Message passing has the following requirements: a way to establish a link
+between the communicating processes, and primitives for sending and receiving
+messages.
+<p>
+The link establishment may be implicit or explicit.
+In direct communication, there is no explicit link establishment, and the
+sender directly names the target process (using pid etc.) in the send call.
+This method is clearly somewhat inflexible, and is not commonly used.
+In indirect communication, a link is first explicitly established.  The link
+may be variously known as channel, mailbox, port, message queue etc.
+Corresponding to the link, the kernel would allocate a buffer that would be
+used to store messages that have been sent but not yet delivered to the
+receiver.  Both the sender and receiver would specify the link rather than
+the identity of the other process in send/receive calls.
+<p>
+For establishing the link in indirect communication, one of the processes
+first creates the link (using some system call).  The question is how does
+the other process obtain access to this link.  One possibility is to give
+the link a name that is known to both processes.  The second process would
+then simply request the OS for access to the link with the specified name.
+Clearly this scheme requires a notion of read and write permissions to be
+associated with links so that arbitrary processes cannot send messages to
+or receive messages from the link.  Examples of such a scheme are
+named pipes in Unix, and System V message queues (see manual page of
+<i>msgget</i> system call for details).
+<p>
+The other possibility is that the two processes are related (for example
+by a parent-child relationship).  In this case one of the processes
+creates the link, and then creates the second process which inherits access
+to the link.  We shall see a detailed example of this scheme when we
+study the operation of Unix (unnamed) pipes in detail in the next lecture.
+Note that since only ``related'' processes can communicate in this
+scheme, there is no need for permissions to be associated with the link.
+<p>
+There are some other design issues in message passing based communication.
+For example, are the send and receive calls blocking or non-blocking.
+That is, does the send call block till the message is delivered to the
+receiver?  Similarly does the receive call block till a message is available?
+Typically the send calls do not block (i.e., they are asynchronous) unless
+the buffer associated with the link is full, and the receive calls typically
+block (i.e., they are synchronous) till some message is available.
+Another issue is: whether message boundaries are preserved?  That is, does
+the receiver receive a sequence of demarcated messages, or just a stream of
+bytes.  The former is the case with message queues, while the latter is the
+case in the case of Unix pipes (both named and unnamed).
+
+<p>
+<a href = "#Contents">Back To Contents </a>
+<p>
+<hr>
+</body>
+</html>

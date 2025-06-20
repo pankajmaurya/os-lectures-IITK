@@ -1,0 +1,170 @@
+<html>
+<head>
+<title>Lecture notes for CS330 (lecture - 34)</title>
+<!--
+	replace n above by the lecture number
+-->
+</head>
+<body text="#000000" link="#000000" vlink="#000000" background="bg3.gif">
+
+<center>
+<h2>
+	Symbolic links and Directory Layout	
+<p>
+Lecture-34<br>
+Operating Systems (CS330)
+</h2>
+</center>
+
+<h4>
+Lecturer: Deepak Gupta<br>
+Notes prepared by: Mohit Mangal<br>
+Lecture Date: November 7, 2004
+</h4>
+
+<a name= "content"></a>
+
+<h4>Contents</h4>
+
+<ul>
+
+	<li><a href="#unlink">Unlink.</a></li>
+
+<li><a href="#symlink">Symbolic Links.</a>
+
+<li><a href="#syscall">System Calls and Symbolic Links.</a>
+
+<li><a href="#layout"> Layout of Directories.</a>
+
+<li><a href="#multiple">Multiple Filesystem.</a>
+
+<li><a href="#ref">Further Reading and References.</a>
+
+</ul>
+<hr>
+<a name= "unlink">
+<h4>
+Unlink
+</h4>
+
+<p>
+<i>unlink( Pathname)</i> - unlink  system call deletes  a  name from the filesystem i.e. it decrease the link count of the inode for that file . If the link count in inode becomes zero  and no processes have the file open, the file is  deleted and the space occupied by it is made available for reuse.
+If  the  name  was the last link to a file but any processes still have the file open the file will remain in existence  until  the  last  file descriptor from global file descriptor table referring to it is closed i.e. till its reference count in incore inode table becomes zero. The process can continue to access file with that open file descriptors but once its link count becomes zero no new file descriptor can refer to that inode.</p>
+<P><a href="#content">back to contents</a>
+</p>
+<hr>
+<a name= "symlink">
+<h4>
+	Symbolic Links
+</h4>
+<p>
+In the last lecture we saw hard links but they have some problems like 
+<ul>
+	<li>You can make hard links to file on the same filesystem only as they store only the inode number of the original file and different files on different filesystem can have same inode number.</li>
+	<li>Only root can make hard links to directory as it can create a cycle which will make commands like rm to go in infinite loop.
+	<li>
+	  There can be problem like a user 1 created a file /y/k/g. Then a user 2 created a hard link named m to g . Now user 1 removes the file g using rm g. The directory entry for g will be removed but g will not be removed since there is hard link m pointing to g. And since user1 has deleted g he has no way to figure out which files are pointing to the file g. So g will keep on hogging disk quota of user1 while user1 will think he has deleted g. <br>
+	 <div align="center">   <img src="hardlink1.jpg" width="350" height="413"><img src="hardlink2.jpg" width="350" height="405"></div>
+	</li>
+</ul>
+
+So to overcome this limitations soft links or symbolic links were introduced. To create a symbolic link we use the system call <i>symlink </i>. So <i>symlink("/B/x","/C/y") </i>create a link to x. The action that takes place when symlink is created are 
+<ul>
+	<li> A directory entry in C is created and it point to the inode of y.</li>
+	<li> A new inode is created for y. It is of type symbolic link. The owner of the link is who created the symlink. </li>
+	<li>
+	   The data contained in the inode is the path of the file its point to i.e. "/B/x". It is not necessary that the file that its point to already exist when the symlink was created.<div align="center"><img src="softlink1.jpg" width="350" height="365"><img src="softlink2.jpg" width="279" height="365"></div>
+	</li>
+	
+</ul>	
+<p>While parsing a path containing symlink like &quot;/z/m&quot; the kernel knows that m is symlink and so it prepend the path refered by the symlink i.e. /y/k/g to the path remaining to be parsed in this case null. So when we do open(&quot;/z/m&quot;,___ ) it open the file pointed by /z/m and not the symlink itself. But this can lead to cyclic path and the parsing will be caught in a cyclic loop. We cannot afford a expensive cycle detection algorithm . So to avoid cycles an upper limit is imposed on  the number  of time the symbolic link will b prepended. Then in case of path containing cycle the parsing of a path  will fail and retrurn error. But it may be possible that a path may contain symbolic links greater than the upper limit imposed by the kernel. </p>
+<p>We can also pass releative path while creating symlink like symlink(&quot;k/g , /y/new). If the contents of the file is a relative path name, it is interpreted relative to the directory containing the link itself, not the current working directory of the process doing the lookup or creation.
+  </p>	
+</p>
+<p>
+<a href="#content">back to contents</a>
+</p>
+<hr>
+<a name= "syscall">
+<h4>
+	System Calls and Symbolic Links
+</h4>
+<p>
+
+Most of the system calls which have some file path as its argument chase symbolic links. Major among them are open, execve, stat and chmod. Also you can't use the read and write system call to read and write data to symlink because the open system call will open the file referred by the symlink and not the symlink itself. but this lead to three problems
+<ul> 
+	<li> How will ls file know of whether a file is symlink or not because soon as it will do stat or open it will get information about the referring file and not the link itself ?</li>
+	<li> How recursive commands like find will figure it has to stop chasing symbolic link as chasing symbolic link can get them into infinite cycle?</li>
+	<li> How can you get metadata of symbolic link (stat will return metadata of the file symlink refers to) ? </li>
+</ul>
+ 
+To overcome this difficulty we have the <i>lstat(path,* buffer)</i> system call. Lstat system call chases all the component of the path given to it except the last component. Suppose B and d are symlink then  lstat("/A/B/C/d") will chase the symlink B but will not chase d and thus give metadata of the symlink d.<br>
+Another system call <i>readlink(path)</i> gives the data of the symlink i.e. the path of the file it refer to. Readlink also like lstat chase  all the component of the path given to it except the last component.<br>
+Unlink system call removes the symbolic link and not the file it refers to.
+
+<p> <a href="#content">back to contents</a>
+</p>
+<hr>
+	
+<a name= "layout">
+<h4>
+	Layout of Directories
+</h4>
+<p>
+There are four major operation on directory for which we have to optimize the layout of data in terms of time and space. The four operations are search, insert,delete and list. Since this operation has to be performed on disk we will like to minimize the number of disk access rather than access to memory. If we keep an data structure like link list then search and delete may require more than one disk I/O. So we keep simple layout like an array. A single entry contain inode number and the file name. An entire block is read into memory in one disk I/O which will contain several directory entires. Searching in memory is inexpensive as compared to disk so searching and listing on average require just one disk I/O if there are small number of entries. Initially all entries are marked invalid and a pointer points to the first invalid entry. To insert and delete entries in the list a valid bit is associated with each entry and pointer to the next free entry in the list . To delete  an entry the bit is set to 1 marking the entry as invalid and the pointer is set. To insert an entry the first invalid entry is used. </p>
+<p>Since the length of filenames are variable we cannot set the length field of name as constant as this will lead to internal fragmentation. So we store the directory entry in the following way :- </p>
+<table width="100%"  border="1" bordercolor="#000000" bordercolordark="#000000">
+  <tr>
+    <td width="12%"><div align="center">Inode No.(4 bytes) </div></td>
+    <td width="21%"><div align="center">Length of entry in Bytes(2 bytes) </div></td>
+    <td width="24%"> <div align="center">Length of filename in Bytes (2 bytes)</div></td>
+    <td width="18%"><div align="center">Filename</div></td>
+    <td width="8%"><div align="center">hole</div></td>
+    <td width="17%"><div align="center">Next Entry Start here </div></td>
+  </tr>
+<tr>
+    <td><div align="center">125</div></td>
+    <td><div align="center">30</div></td>
+    <td><div align="center">10</div></td>
+    <td><div align="center">&quot;this is a filename &quot; </div></td>
+    <td>&nbsp;</td>
+    <td>&nbsp;</td>
+  </tr>
+</table>
+<p>So when a new entry is to be inserted it checks the size of hole .In this case the size of hole is 30 - 10 -2 -2 -4 = 12. And if the length of entry is less than the size of the hole it insert here otherwise it search for the next hole. when it insert here it occupies the rest of the void space if left and also modify the field &quot;length of the entry&quot; in the previous entry. Thus this leave us only with external fragmentation </p>
+<p>  <a href="#content">back to contents</a></p>
+<hr>
+<a name= "multiple">
+<h4>
+	Multiple Filesystem
+</h4>
+<p>
+Today almost all the operating system support multiple filesystem's. Microsoft Windows-based systems mount each partition in a separate name space,denoted by a letter and a colon like C:. All files accessible in a Unix system are arranged in one big tree, the file hierarchy, rooted at /.  These files can be spread out over several devices. The mount system call serves to attach the file system found on some device to the big file tree.  When a system get booted we have only one filesystem i.e. the root filesystem and then we can mount other filesytem anywhere in the filesystem hierarchy. If the mount point is not empty all the files and directories below the mount point are hidden and cannot be seen until the mounted filesytem is unmounted from the mount point. Since different filesystem can have same inode number we store both the filesytem# and inode# in the incore inode table. To search in the incore inode table we create hash function from both the filesystem# and the inode#.
+
+<div align="center"><img src="mount.jpg" width="675" height="509"></div>
+<br>
+The system call to mount filesystem is <i>mount(filesystem device file, mount point , type of filesystem)</i>. A mount table is maintained in memory in which the inode number of the mount point, inode number of the root of the mounted filesystem is stored and type of filesystem is stored. This is used in parsing of the path by various system calls. Parsing can take place in two ways.
+<ul>
+	<li> When traversing a path like <b>/x/a/r</b> it encounters a mount point <b>a</b> find the corresponding superblock of the mounted filesystem from mount table and jump to that superblock and continue traversing of the path.</li>
+	<li> When traversing a back path like from directory x ../../b it look at the root of the mounted filesystem and if it is present in mount table it jump to the corresponding mount point.</li>
+</ul>
+The <i>umount(dir)</i> system call unmount the filesystem mounted on the directory given a argument.</p>
+<p> <a href="#content">back to contents</a>
+</p>
+<hr>
+<a name= "ref">
+<h4>
+	References.</h4>
+<p>	
+<ul>
+	<li><a href=http://www.cs.wisc.edu/~mattmcc/cs537/notes/FileSystemsII.pdf>Course Notes 1</a></li>
+	<li><a href=http://www.cs.nyu.edu/courses/spring04/V22.0202-003/lecture-17.html>Course Notes 2</a></li>
+	<li><a href =http://www.cs.wisc.edu/~solomon/cs537/filesys.html#implementation-symlinks>Implementation of Links</a></li>
+</ul>
+
+<br>
+<a href="#content">back to contents</a>
+</p>
+<hr>
+</body>
+</html>

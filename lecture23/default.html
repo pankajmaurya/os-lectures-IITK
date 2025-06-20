@@ -1,0 +1,251 @@
+<head>
+<title>Lecture notes for CS330 (lecture 23)</title>
+<!--replace n above by the lecture number
+Last modified: 24-Aug-2004 at 21:11 by rachnaa@iitk.ac.in-->
+</head>
+<body text="#000000" link="#000000" vlink="#000000" background="..\bg3.gif">
+
+<center>
+<h2>CPU Scheduling (2)
+<br>Lecture-23<br>
+Operating Systems (CS330) </h2>
+</center>
+<h4>Lecturer: Deepak Gupta<br>
+Notes prepared by: Rachna Agarwal<br>
+Lecture Date: Aug 21, 2004 </h4>
+
+<h4><a name=content></a>Contents</h4>
+
+<ul> 
+ <li> <a href="#Intro">Multilevel feedback queue scheduling</a> </li>
+ <li> <a href="#bsd">Scheduling Algorithm in BSD.</a> </li>
+ <li> <a href="#linux">Scheduling Algorithm in Linux</a> </li>
+ <li> <a href="#solaris">Scheduling Algorithm in Solaris.</a> </li>
+</ul>
+
+<p><a name=Intro></a>
+In the last lecture we had studied some basic scheduling
+policies. These are used as building blocks for more realistic scheduling
+policies being used in operating systems today. In this lecture we will study
+some algorithms being used in the contemporary operating systems like BSD, Linux
+and Solaris. </p>
+
+<h4>Multilevel Feedback Queue Scheduling </h4>
+
+<p> This forms the core idea of scheduling algorithms
+in most operating systems. It is similar to multilevel queues/priority queues 
+which were discussed in the the last lecture.
+Normally in multilevel queue-scheduling algorithms,
+processes are permanently assigned to a queue on entry to the system. 
+<i>Multilevel feedback queue scheduling</i>, however, allows a precess to move
+ between queues.The idea is to separate processes with different CPU usage
+characteristics based on their past behavior. 
+ The basic principle used to assign priorities so as to increase efficiency is as follows:
+</p>
+<ul>
+ <li>Interactive Jobs are given a higher
+     priority as they need a smaller response time. </li>
+ <li>Compute Intensive jobs are given a lower priority. </li>
+</ul>
+
+<p>The question is to decide which job is interactive and
+which is compute intensive. This is decided on the basis of past performance.
+ An interactive process is characterized by short CPU bursts
+and long I/O bursts while a compute intensive process has long CPU bursts. The
+priority of a process may change over time and it may move from one queue to another
+depending upon its behavior. This is known as `feedback'. Care should also be
+taken that the compute intensive
+jobs do not starve even though they have a lower priority. </p> 
+
+<p> A multilevel feedback queue scheduler is defined by the following parameters : </p>
+<ul>
+ <li >How many queues are there? </li>
+ <li>What scheduling discipline is used within each queue? </li>
+ <li >When are processes promoted to a higher priority level and when are they
+demoted to a lower level?</li>
+ <li>Which is the default queue that a job enters?
+</ul>
+Different operating systems use different approaches for selecting these 
+parameters.  Let us look at some of these.
+<p>
+<a href="#content">Back to Contents</a>
+
+<h4><a name=bsd></a>CPU Scheduling in BSD</h4>
+BSD is a Unix variant and is a non-preemptible kernel.
+It has 128 priority levels (0-127). Numerically
+higher number indicates low priority i.e., 127 is the lowest priority level. 
+Round robin scheduling is used within each priority level with a time 
+quantum of 100ms. 
+Preemption occurs only when the current process finishes its quantum (and
+never when a process wakes up).
+The scheduler always picks up the first process in the highest priority 
+non-empty queue. 
+
+<h4>Priority Computation</h4>
+The priority of a process is computed as:
+
+<blockquote>
+priority = PUSER + &lceil;p_cpu/4&rceil; + p_nice
+</blockquote>
+
+where
+<ul>
+<li>
+PUSER is a constant.  It is added so that the system processes always 
+have a higher priority than user processes. For system processes, a lower
+constant PSYS is used instead.
+<li>
+p_nice is the <i>nice value</i> of the process.  The nice value is a user
+controllable parameter that influences the priority of a process.  Higher
+the nice value of a process, the lower (numerically higher) is its scheduling 
+priority.  The <i>nice</i> and <i>renice</i> system calls can be used to
+change the nice value of a process.  For obvious reasons, only the superuser
+is allowed to decrease the nice value of a process, ordinary users can only
+increase the nice value of their own processes (and hence be nice to other
+users!).
+The range of the nice value of a process is -32 to 32. The default is 0.
+<li>
+p_cpu is the amount of CPU time a process has accumulated so far (in units of
+clock tics).
+Whenever the timer interrupt occurs, the timer handler increases the p_cpu
+value of the current process by 1. 
+</ul>
+It can be seen that a compute intensive process will ultimately go down to 
+priority level 127 since its p_cpu value keeps increasing).
+As a consequence it may start starving.
+So sometimes, the priorities need to be jacked up to
+ensure that no process starves. To accomplish this, a digital decay filter
+is applied on the p_cpu value of every runnable process once every second
+as follows.
+<blockquote>
+p_cpu = p_cpu(2.load)/(2.load + 1) + p_nice
+</blockquote>
+where load is the average length of the run queue over the last one minute.
+The decay of the CPU time consumed by a process ensures that the CPU bound 
+processes do not get penalized so much that they start starving.  The value
+of p_cpu for a process is the exponential average of the CPU times consumed
+by the process in one second intervals, weighted by the system load when they
+were consumed.  Thus processes that consume CPU time when the system load is
+high are penalized more.  Also the past history of CPU consumption of a
+process is slowly forgotten due to the exponential decay.
+<p>
+Since the decay computation is performed every second by the timer interrupt
+handler, it constitutes a major overhead.  To reduce this overhead, the
+computation is done only for runnable processes.  The p_cpu value for
+sleeping processes is adjusted when they wake up using a slighly different
+formula shown below.
+<blockquote>
+p_cpu = p_cpu[(2.load)/(2.load + 1)]<sup>sleeptime</sup>
+</blockquote>
+Here, sleeptime is the time in seconds for which the process slept.
+Note that p_nice does not get added in the above computation.  This
+gives a slight advantage to sleeping processes.  The other difference
+from the formula for runnable processes is that the load value at the
+time of waking up is used.
+
+<p ><a href="#content">Back to Contents</a> </p>
+
+<h4><a name=linux></a>CPU Scheduling in LINUX</h4>
+
+<p>The Linux scheduling policy is a variation of the round robin
+scheduling policy.  One of the differences is that the time quantum
+for a process depends on its nice value: higher the nice value, smaller
+the quantum.  The more significant difference is that if a process
+gives up the CPU voluntarily before expiry of its quantum, the unused
+portion of its quantum is remembered.  The process to execute next
+is the one with the highest unused time quantum.  If the highest
+unused quantum amount among all runnable processes is 0, <i>all</i>
+processes (including sleeping processes) are issued fresh quanta;
+however sleeping processes retain half of their unused portions of
+the previous quanta as well.  As in BSD, preemption occurs only on
+completion of the quantum by the current process.
+<p>
+For each process, the following two fields are maintained.
+<dl>
+<dt><i>priority</i>
+<dd>This is the amount of one full time quantum for the process and
+depends on its nice value.
+<dt></i>counter</i>
+<dd>This is the time left in the current quantum for the process.
+</dl>
+On every clock tick, the counter value of the current process is decremented
+by one.  When scheduling occurs, the runnable process with the highest
+counter value is chosen.  If the highest counter value among all runnable
+processes is 0, counter values for all processes are recomputed as:
+<blockquote>
+counter = (counter/2) + priority
+</blockquote>
+Note that the above formula means that when fresh quanta are issued,
+sleeping processes retain half of the unused portions of their previous
+quanta, thus getting an advantage in scheduling on waking up.
+
+<p ><a href="#content">Back to Contents</a> </p>
+
+<h4><a name=solaris></a>CPU Scheduling in Solaris</h4>
+
+In Solaris, as opposed to BSD and Linux, preemption can also occur
+when a process is woken up, if the woken up process has a higher priority
+than the currently running process.  Solaris has a table driven scheduler;
+the table specifies the parameters for each scheduling class.  The
+values in the table can even be tuned by the (super)user.
+<p>
+There are 170 priority levels in Solaris.  Numerically higher priority
+also denotes higher actual priority.  Solaris supports multiple process
+classes, such as system process, real-time processes, interactive processes,
+timesharing processes etc.  Each class uses a different scheduling algorithm.
+Here, we will look at only the timesharing class of processes.  These
+processes have priority levels 0 to 59.
+<p>
+The scheduling algorithm for the timesharing class is simple preemptive
+scheduling with round robin scheduling used within each priority level.
+However, the priority of a process may keep changing depending on its
+behavior, as in BSD.  The scheduling parameters for each priority level are
+given by the <i>dispatch table</i> which contains the following fields
+for each priority level:
+
+<dl>
+<dt><i>quantum</i>
+<dd>The time quantum at the priority level.  Usually, higher quanta are used
+at lower priority levels. (why?)
+<dt><i>tqexp</i>
+<dd>
+The priority level that a process goes to when it finishes its time quantum
+(and is preempted).  This is usually about 10 levels below the current priority
+level.
+<dt><i>slpret</i>
+<dd>The new priority level for a process currently at this level when it
+wakes up.  Usually this value is in the 50-59 range.  Note that this means
+that sleeping processes are rewarded very well immediately on waking up.
+This is done, of course, in the hope of improving response times for
+interactive processes.
+<dt><i>maxwait</i> and <i>lwait</i>
+<dd>
+When a process at a certain priority level has been waiting in the ready
+queue for more than
+maxwait number of seconds for the level, its priority is changed to
+the lwait value for the current priority level.  The lwait value for
+any priority level is generally greater than the priority level itself.
+This ensures that compute intensive processes do not starve.
+The default value for maxwait is 0 for all priority levels and the
+default value for lwait ranges from 50 to 59.  This means that a process
+that has been waiting in the ready queue for at least one second gets
+promoted to a fairly high priority.
+</dl>
+
+<p><a href="#content">Back to Contents</a> </p>
+
+<br><br>
+<b>References:</b>
+<ul>
+<li> <a href="http://web.cse.iitk.ac.in/~cs330/www03-04/notes/cpusched/cpusched.htm">
+Last year's Website.</a> </li>
+<li> <a href="http://www.cim.mcgill.ca/~franco/OpSys-304-427/lecture-notes/
+node46.html#SECTION00094100000000000000">CPU Scheduling in 4.2BSD Unix OS </a> </li>
+<li> <a href="http://www.arl.wustl.edu/~fredk/Courses/cs422/sp00/Lectures/lecture7.pdf">
+CPU Scheduling.</a> </li>
+
+</ul>
+
+</body>
+
+</html>

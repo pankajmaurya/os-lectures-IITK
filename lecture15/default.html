@@ -1,0 +1,291 @@
+ 
+<html>
+<head>
+<title>Lecture notes for CS330 (lecture - 15)</title>
+<!--
+	replace n above by the lecture number
+-->
+</head>
+<body text="#000000" link="#000000" vlink="#000000" background="..\bg3.gif">
+
+<center>
+<h2>
+Semaphores, Synchronization within the kernel
+<p>
+Lecture-15<br>
+Operating Systems (CS330)
+</h2>
+</center>
+
+<h4>
+Lecturer: Deepak Gupta<br>
+Notes prepared by: Ashok Kumar<br>
+Lecture Date: Sepetember 06, 2004<br>
+</h4>
+
+<h4>
+<u><a name="Lecture contents">Lecture contents</a><hr></u>
+</h4>
+<ul>
+<li><u><a href="#Semaphores">Semaphores</a><br></u></li>
+<li><u><a href="#Mutexes">Mutexes</a><br></u></li>
+
+
+<li><u><a href="#Synchronisation Issue In kernel">Synchronization Issues In kernel </a><br></u></li>
+<ul>
+<li>Uni-processor Systems
+<li>Non-preemptible Kernels
+</ul>
+<li><u><a href="#Implementation Of Semaphore In kernel">Implementation Of Semaphores In kernel </a></u></li>
+<li><u><a href="#Summery Of Kernel Synchronization">Summary Of Kernel Synchronization </a></u></li>
+<p>
+<hr width = 100%>
+
+<h3>
+About this lecture
+</h3>
+We saw some classical algorithms for mutual exclusion in the previous 
+lecture.  In this lecture, we first discuss a high-level synchronization
+primitive: Semaphores.  We first describe the functionality of semaphores,
+how they can be used to solve mutual exclusion and some other common
+synchronization problems.  Then we discuss why synchronization is an issue
+in the kernel as well, and how these problems can be solved.  Finally
+we see how semaphores can be implemented in the kernel (specifically, in
+a certain class of kernels).
+
+
+<h3>
+<a name="Semaphores">Semaphores</a><br>
+</h3>
+A semaphore is a special integer variable which is (usually) initialized to 1, 
+and can only altered only by a pair of functions called <i>P</i> 
+(or <i>wait</i>)</b> 
+and <i>V</i> (or <i>signal</i>).
+
+<p>The <i>P</i> operation checks the value of the semaphore and if it is
+more than 0, it atomically decrements the value by one.  If the semaphore
+value is 0, the process waits till the value is positive.
+<p>
+The <i>V</i> operation simply increments the semaphore value by one.
+<p><i>Conceptually</i>, the operations would be equivaluent to:
+<pre>
+P(S):                                V(S):
+    while (S.value <= 0);                S.value++;
+    S.value--;
+</pre>
+The semantics of the semaphore operations guarantee 
+that the <i>P</i> and <i>V</i> operations are executed atomically.  
+In particular, it must be ensured that between checking the value
+of S and decrementing it (in the <i>P</i> operation), no other process
+can examine or modify the value of S.  Similarly, the modification
+to the semaphore value (in the <i>P</i> or <i>V</i> operations)
+must be performed atomically with respect to other inspections or
+modifications of the semaphore value.  Note that
+the code shown above clearly
+does not guarantee this; it is only meant to illustrate the semaphore
+functionality.  We will see later how semaphores can be implemented.
+<p>
+Given semaphores, one can now easily implement mutual exclusion:
+Each set of critical sections is associated with a semaphore,
+the entry code performs the <i>P</i> operation on the semaphore,
+and the exit code performs the <i>V</i> operation on the semaphore.
+The initial value of the semaphore should clearly be 1.
+<p>
+Consider another synchronization problem: process <i>P1</i> must
+execute its statement <i>S1</i> <i>after</i> process <i>P2</i>
+has executed statement <i>S2</i>. This is a typical ``event wait''
+problem and can be easily solved using a semaphore initialized to 0.
+<i>P1</i> should perform <i>P</i> operation on the semaphore
+<i>before</i> executing <i>S1</i>, and <i>P2</i> should execute
+the <i>V</i> operation on the semaphore <i>after</i> executing
+<i>S2</i>.
+
+<hr width = 100%>
+
+<h3>
+<a name="Mutexes">Mutexes</a><br>
+</h3>
+Mutexes (also called Locks, or binary Semaphores)
+are a special kind of semaphores where the semaphore value
+can only be 0 or 1 (the general form of semaphores are called
+counting semaphores).  The initial value for a mutex 
+is always 0 (`unlocked' state).  The operations <i>lock</i> and 
+<i>unlock</i> on mutexes correspond to the semaphore operations 
+<i>P</i> and <i>V</i> respectively.  However, unlocking an already unlocked
+mutex has no effect.
+
+
+<hr width = 100%>
+<h3>
+<a name="Synchronisation Issue In kernel">Synchronisation Issues In kernel
+</h3>
+As we already know, the kernel code typically executes concurrently on behalf
+of multiple processes.  Since all processes executing inside the kernel share
+all global kernel data structures, mutual execlusion and synchronization are
+clearly important problems in the kernel implementation as well.  We shall 
+now examine the typical solutions employed to solve these problems.
+<p>
+
+<h4>Uni-processor Systems</h4>
+We will first consider uni-processor systems.  Here only one process can be
+running at any given point in time.  Sychronization problems can occur in the
+kernel if the currently running process is executing inside the kernel, is
+accessing a global data structure, and:
+<ul>
+<li>
+an interrupt occurs and the interrupt handler tries to access the same
+data structure; or
+<li>
+an interrupt occurs, the interrupt handler preempts the current process,
+and the new process that resumes execution (after the preemption) also
+accesses the same data structure.
+</ul>
+Note that when two processes (or a process and an interrupt handler) attempt
+to access the same data concurrently, the possibility of inconsistencies
+arises only when at least one of them also attempts to modify the data
+structure.  We are assuming that to be indeed the case in the two scenarios
+outlined above.
+<p>
+The simplest solution to this problem is to disable interrupts while
+the global data structure is being accessed, and reenable them when
+the access to the data structure is finished.  Thus, no interrupt
+handler can run in this duration, not can the current process be 
+preempted (since preemption can only occur if an interrupt arrives).
+However, this simple solution requires interrupts to be disabled for
+long durations of time since most kernel data structures are global
+(and hence shared).  This is clearly not desirable.
+<p>
+A more practical solution to this problem is to use a <i>non-preemptible</i>
+kernel.
+
+<h4>Non-Preemptible kernels</h4>
+A non-preemptible kernel has the policy that a process executing in the
+kernel cannot be <i>involuntarily</i> context-switched out (i.e., preempted).
+Note that this policy does <i>not</i> mean that a process can never be 
+preempted.  It only implies that that the preemption cannot occur while
+the process is executing inside the kernel.  A non-preemptible kernel
+can thus still have a preemptive scheduling policy.  In such a kernel,
+preemption would only occur when the current process is ``about to
+return to the user mode''.  To implement such a scheme, if an interrupt
+handler determines that it is time for preemption, instead of 
+carrying out the preemption immediately, it would simply set a flag.
+When the current process is about to return to the user mode, this
+flag would be checked, and if set, preemption would be carried out.
+<p>
+It should be clear that having a non-preemptible kernel vastly reduces
+the number of critical sections since while accessing a global data
+structure, only an interrupt handler can interfere; and the number of
+data structures accessed by interrupt handlers is relatively small. 
+Thus, in such a kernel, we only need to disable interrupts while
+accessing data that is also accessed by some interrupt handler.
+<p>
+
+<a href="#Lecture contents">Back To contents </a>
+<hr width = 100%>
+<h3>
+<a name="Implementation Of Semaphore In kernel">Kernel Semaphore 
+	Implementation</a>
+</h3>
+Now assuming a uni-processor machine and a non-preemptible kernel,
+consider the following implementation of the semaphore operations.
+Assume that no interrupt handler uses the semaphore S.  Is this
+implementation correct?
+<pre>
+P(S):                          V(S):
+    while (S.value <= 0);          S.value++;
+    S.value--;
+</pre>
+Note that the non-preemptibility of the kernel assures the required
+atomicity in the semaphore operations above.  However, this implementation
+is still not correct since if a process executing the <i>P</i> operation
+find the value of the semaphore to be 0, it will keep looping waiting for
+it to become positive.  But the process that currently holds the semaphore
+cannot run since the current process cannot be preempted.  Thus, the
+semaphore value will remain 0, and the process will loop forever.
+<p>
+Apart from this, a common problem with all synchronization algorithms
+discussed so far is that they all require ``busy waiting'', i.e., even
+while a process waits to enter the critical section, or for some other
+event to occur, it consumes CPU cycles.  This is clearly wasteful.
+Ideally, processes that need to wait for some event to occur should
+not require the CPU till the event occurs.  The notion of waiting for
+an event in the kernel has already been seen in the context of processes
+waiting for I/O to be over.  The same notion of an event can be 
+extended to software events, such as, execution of a <i>V</i> operation
+on a semaphore.
+
+<h4>Events</h4>
+Let us define an <i>event</i> as an abstract type with two operations:
+<i>sleep</i> and <i>wakeup</i>.  The <i>sleep</i> operation puts the
+calling process to sleep till it is woken up.  The <i>wakeup</i>
+operation wakes up a process waiting for the event to occur (if one
+exists).  One may also think of a <i>wakeall</i> operation that wakes up 
+<i>all</i> processes waiting for the event to occur.
+
+<p>
+Now let us use the <i>event</i> mechanism to come up with a correct
+implementation of semaphores in a non-preemptible kernel for uni-processors,
+that also does not use busy waiting.  The basic idea is that when a
+process, while performing the <i>P</i> operation on <i>S</i>
+finds <i>S.value</i> to be 0, it waits for an event that is associated
+with the semaphore (<i>S.event</i>) to occur.  In the
+<i>V</i> operation, the event <i>S.event</i> is signalled after
+incrementing <i>S.value</i>.  Atomicity of access to the semaphore
+value is guaranteed by the non-preemptibility of the kernel as before.
+<pre>
+P(S):                          V(S):
+    while (S.value <= 0)           S.value++;
+        sleep(S.event);            wakeup(S.event);
+    S.value--;
+</pre>
+Note that in the <i>P</i> operation, after waking up, the process checks
+the semaphore value again.  Why is this required?  Also observe that this
+semaphore implementation does not guarantee bounded wait even if the wakeup
+operation wakes the first process to go to sleep on the event (why?).
+A semaphore implementation that guarantees bounded wait is left as an
+exercise.
+<p>
+So far we were assuming that while accessing a global data structure,
+the process would not voluntarily give up the CPU (i.e. sleep).  In
+this case, exclusive access to the data structure by the current 
+process was ensured by disabling interrupts (if the data structure
+could also be accessed by an interrupt handler).  However, suppose
+that while accessing a global data structure may go to sleep,
+and it is required that the data structure should not be accessed by 
+another process even while this process is asleep.  In such a 
+situation, the non-preemptibility of the kernel does not help since
+the process is giving up the CPU voluntarily.  The solution in this
+case is to associate a semaphore with the data structure, and ensure
+that any piece of kernel code that accesses this data structure
+acquires this semaphore before beginning access to the data structure
+and after finishing, releases the semaphore.
+<p>
+Note, however, that a data structure that is also  accessed by an
+interrupt handler cannot be protected by using a semaphore; it must
+be protected by disabling interrupts.  If the former is done, it is
+possible that while the current process holds the semaphore, an interrupt
+occurs, and the interrupt handler also tries to acquire the same
+semaphore, resulting in a deadlock, since the interrupt handler
+(which is waiting for the semaphore) is running in the context of
+the same process that is holding the semaphore.
+
+<p>
+<a href="#Lecture contents">Back To contents </a>
+<br>
+<br>
+<hr width = 100%>
+<h3><a name="Summery Of Kernel Synchronization">Summary Of Kernel 
+	Synchronization</a></h3>
+<ul>
+<li>Make the kernel non-preemptible.</li>
+<li>Disable interrupts while accessing a data structure that is also
+used by some interrupt handler.
+<li>Use semaphores to lock data that the current process does not
+wish to be accessed by another process <i>even while it is asleep</i>.
+</ul>
+
+<a href="#Lecture contents">Back To contents </a>
+<br>
+<hr width = 100%>
+</body>
+</html>

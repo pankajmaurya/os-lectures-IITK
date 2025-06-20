@@ -1,0 +1,181 @@
+<html>
+<head>
+<title>Lecture notes for CS330 (lecture - 5)</title>
+<!--
+	replace n above by the lecture number
+-->
+</head>
+<body text="#000000" link="#000000" vlink="#000000" background="..\bg3.gif">
+
+<center>
+<h2>
+Booting the Operating System, Notion of Kernel, Monolithic v/s Micro-kernels
+<p>
+Lecture-5<br>
+Operating Systems (CS330)
+</h2>
+</center>
+
+<h4>
+Lecturer: Deepak Gupta<br>
+Notes prepared by: Devendra Jadhav<br>
+Lecture Date: August 5th, 2004
+</h4>
+
+<h4>Lecture Contents:</h4>
+<ul>
+<li> Booting the Operating System 
+<li>Notion of <i>Kernel</i>
+<li>Monolithic and Micro-Kernels
+</ul>
+<hr>
+
+<h4>Booting the Operating System:</h4>
+Booting is the sequence of events which are responsible for loading the Operating System on a computer when 
+it is started. Just after a computer has been turned on, it doesn't have an operating system in the memory. 
+The hardware itself cannot perform complicated actions of the OS such as loading a program from the disk, 
+disk I/O etc. Therefore there should be some mechanism to load the OS in the memory at the start. 
+
+<P>
+Loading the OS code in memory is a two step process.  First, at power on, a 
+small bootloader program resident in the ROM starts executing.  This program
+loads a more complex bootloader or bootstrap loader program (such as LILO
+or Grub for Linux) from the disk.  This bootloader is generally stored in
+the first sector (the so called boot sector) of the disk.
+This bootloader does the important task of loading the OS into the memory.
+
+After loading the Operating System, control passes to the <i>main</i> function of the OS. This function basically 
+initializes the resources etc. Following are the main functions of the initialization code: 
+<ol>
+<li>To perform initializations - The OS performs the following initializations at this stage:  
+<ul>
+<li>Initializes data structures needed for various computations.
+<li>Performs hardware level initializations. 
+<li>Loads the interrupt vector table into the memory and enables interrupts.
+<li>Sets up address translation tables needed to translate virtual address space to physical address space and ``turns on'' virtual memory.
+</ul>
+Note that at power on time, the processor is in the supervisor mode, all 
+interrupts are disabled (since interrupt handlers have not been installed yet),
+and virtual memory is turned off (since the address translation tables have
+not been set up yet).
+
+<li>To <i>create</i> the first user process - We know that the OS runs always in context of some process and is 
+itself a passive entity. Therefore we always need at least one process for the system to function.
+Usually processes are created by other processes by making system calls.
+However, the first process is <i>hand-crafted</i> by the operating system.
+This process is usually made to execute a trusted (by the operating system)
+program.  This program is the <i>init</i> program in Unix.
+
+After handcrafting the first process, the OS initialization code ``returns''
+in the context of this process.  The effect is that this process starts 
+executing the user program (e.g., <i>init</i>) in the user mode.  From now
+on, the OS code only executes in response to a system call, interrupt, or
+exception.
+program which runs mainly to make the OS run the OS code in context of itself. It runs in the user mode. 
+</ol>
+<h4>Useful Links:</h4>
+<ul>
+<li><a href = http://www.wlug.org.nz/BootLoader>http://www.wlug.org.nz/BootLoader </a> 
+<li><a href = http://en.wikipedia.org/wiki/Bootloader>http://en.wikipedia.org/wiki/Bootloader</a> 
+<li><a href = http://www.knoppix.net/docs/index.php/booting> http://www.knoppix.net/docs/index.php/booting</a>
+</ul>
+<p>
+<hr>
+
+<h4>Operating System vs Kernel</h4>
+So far, our descriptions have assumed that the operating system code always
+runs in the supervisor mode of the processor.  This need not be true, in general.
+It is possible that some services expected from the operating system by the users
+may be provided by user level processes.  In fact, the term Operating System
+itself may have different connotations for different users.  A naive user might
+believe the shell, and the windowing system to be actually part of the
+operating system, while a low level programmer may be more savvy.
+The term <i>kernel</i> is used to denote that part of the operating system code
+that runs in the supervisor mode of the processor.  Thus, to be technically
+precise, we should use the term kernel whenever we mean this part of the OS
+code.
+
+<P>
+<h4>Monolithic v/s micro-kernels</h4>
+Most commercial operating systems (most flavours of Unix, for example) implement
+all OS services in the kernel itself.  Such kernels are called <i>monolithic</i>
+kernels since such a kernel is a big, fat blob of code.  This approach has
+the disadvantage that maintaining the kernel code is very difficult, since
+any change in the code is likely to affect many other pieces of code.
+
+<p>
+An alternative to monolithic kernels is the model of so called <i>micro-kernels</i>.
+A micro-kernel provides only basic functionality that <i>must</i> be implemented
+in the kernel, and the rest of the OS services are provided by user level
+server processes.  This design was motivated by the fact that not all OS code
+<i>needs</i> to execute in the supervisor mode.
+The entire OS now consists of the kernel, and several user level programs.
+All these components are physically isolated from each other (i.e., they run
+in different address spaces), and can only interact through well defined
+interfaces.  This has the advantage of making the OS code much more maintainable
+since changes to any one part of the code impact a smaller fraction of the
+total code.
+
+<p><i><a href="http://www-2.cs.cmu.edu/afs/cs/project/mach/public/www/mach.html"
+ target="new">Mach</a></i> is one of the best known examples of a micro-kernel.
+<a href="http://www.gnu.org/software/hurd/hurd.html" target="new"><i>GNU 
+HURD</i></a> is a well known, Unix like operating system that is built on top
+of the Mach kernel.
+
+<P>
+To understand the operation of a micro-kernel based operating system, consider
+a hypothetical example.  In this example, the kernel provides only low level
+services to access the disk device and does not implement the file system
+abstraction.  Of course, this facility for low level disk I/O is only available
+to ``privileged'' processes.  Assume now that a user level ``file server''
+implements the file system abstraction.  Now consider a usual user level
+application that needs to access some files.  Since the file system functionality
+is provided by the file server and not by the kernel, how does the user
+application get access to this service?  The usual answer is that the kernel
+implements a message passing based inter-process communication (IPC) service.
+Using this service, the application process can send file access requests to
+the file server.  The file server uses kernel provided low level disk I/O
+services to handle the request, and sends the result back as a message to the
+application process.
+
+<p>
+Note that in this entire process, the application must make two system calls
+to the kernel (one to send the request message, and the other to receive the
+reply), the file server again needs to make two system calls to receive and
+send the messages.  In addition, the file server may, in general, need to make
+other system calls to the kernel to complete the request (to read some sector
+of the disk, for example).  Thus a minimum of four, and possibly more system
+calls are required for a single request.  Since the overhead of making a 
+system call is substantial, this contributes to a significant performance
+penalty.
+<p>
+In addition, before the application process can continue, there must be at
+least two context switches - from the application process to the file server,
+and vice versa.  As we will see soon, a contex switch also has a significant
+performance penalty
+<p>
+Further, there is the overhead of copying messages from sending process'
+address space to the kernel, and then from the kernel to the receiving process'
+address space.
+<p>
+Thus, the performance of a micro-kernel based OS strongly depends on how 
+efficiently IPC is implemented in the kernel.  Even though, micro-kernels
+use heavily optimized IPC implementations, such operating systems still are at
+a considerable performance disadvantage when compared to the traditional
+monolithic kernels.  It is due to this reason primarily, that micro-kernel
+architecture is not used very often by mainstream operating systems.
+
+<h4>Useful Links:</h4>
+<ul>
+<li><a href = http://en.wikipedia.org/wiki/Kernel>http://en.wikipedia.org/wiki/Kernel</a>
+<li><a href = http://wiki.linuxquestions.org/wiki/Kernel>http://wiki.linuxquestions.org/wiki/Kernel</a>
+<li><a href = http://www.wlug.org.nz/Kernel>http://www.wlrg.nz/Kernel</a>
+<li><a href = http://www.mega-tokyo.com/osfaq2/index.php/What%20is%20a%20kernel--shell--GUI--etc>http://www.mega-tokyo.com/osfaq2/index.php/What%20is%20a%20kernel--shell--GUI--etc</a>
+
+</ul>
+<p>
+<hr>
+</p>
+
+</body>
+</html>
