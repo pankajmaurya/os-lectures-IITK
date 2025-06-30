@@ -35,6 +35,34 @@ Since I/O operations are asynchronous, the CPU uses two methods to detect comple
 5. Restore all saved registers
 6. Return to original program execution using special instruction (IRET)
 
+
+The following Mermaid diagram visualizes what happens when `IRETQ` is executed:
+
+```mermaid
+flowchart TD
+    Start([Interrupt Handler Complete])
+    IRETQ["CPU executes IRETQ"]
+    PopRIP["Pop RIP (return address) from stack"]
+    PopCS["Pop CS (code segment) from stack"]
+    PopRFLAGS["Pop RFLAGS (status flags) from stack"]
+    CheckPL["Is this a privilege level change? (e.g., Ring 0 → Ring 3)"]
+    PopSS["Pop SS (stack segment) from stack"]
+    PopRSP["Pop RSP (user stack pointer) from stack"]
+    SecurityCheck["CPU performs privilege checks (CS, SS, stack)"]
+    Resume(["Resume user-mode execution at RIP with restored RFLAGS"])
+
+    Start --> IRETQ
+    IRETQ --> PopRIP
+    PopRIP --> PopCS
+    PopCS --> PopRFLAGS
+    PopRFLAGS --> CheckPL
+    CheckPL -->|Yes| PopSS
+    PopSS --> PopRSP
+    PopRSP --> SecurityCheck
+    SecurityCheck --> Resume
+    CheckPL -->|No| Resume
+```
+
 ### Important Concepts
 - **Interrupt transparency**: Interrupt handling must be invisible to running programs
 - **Interrupt masking**: Lower priority interrupts can be temporarily disabled
