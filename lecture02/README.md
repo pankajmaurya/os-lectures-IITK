@@ -1,5 +1,6 @@
 # Lecture 2: Review of I/O Hardware
 See https://claude.ai/public/artifacts/f0cbf51a-0486-4f15-b4c6-3e57b3c4dd65
+See https://linux-kernel-labs.github.io/refs/heads/master/lectures/interrupts.html
 
 ## Overview
 This lecture covers the fundamental concepts of I/O hardware organization and interrupt handling mechanisms in operating systems.
