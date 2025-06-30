@@ -35,6 +35,23 @@ Since I/O operations are asynchronous, the CPU uses two methods to detect comple
 5. Restore all saved registers
 6. Return to original program execution using special instruction (IRET)
 
+User to kernel stack switch
+```mermaid
+sequenceDiagram
+    participant UserApp as User Space<br>(Ring 3)
+    participant CPU as CPU
+    participant TSS as Task State Segment (TSS)
+    participant KernelStack as Kernel Stack (RSP0)
+
+    UserApp->>CPU: Triggers interrupt or syscall<br>(e.g., `int 0x80`, `syscall`)
+    CPU->>TSS: Checks privilege level (Ring 3 → Ring 0)
+    TSS-->>CPU: Provides `RSP0` (kernel stack address)
+    CPU->>KernelStack: Switches from user `RSP` to `RSP0`
+    CPU->>KernelStack: Pushes SS, RSP (old user stack)
+    CPU->>KernelStack: Pushes RFLAGS, CS, RIP
+    CPU->>KernelStack: Starts executing ISR in kernel
+```
+
 ```markdown
 Top of Stack
 -------------
