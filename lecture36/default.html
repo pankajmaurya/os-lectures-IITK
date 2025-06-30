@@ -52,13 +52,13 @@ Finally, we begin with the Fast File System.</p>
 
 <p><b>Indexed allocation:</b></p>
 <p>File systems in UNIX use indexed
-allocation to allocate disk space. Under this scheme, for each file, an array of  disk block
+allocation to allocate disk space. Under this scheme, for each file, an array ofÂ  disk block
 addresses of the file is maintained. This array may be placed inside the file's
 inode or in a separate block called the index block of the file. The problem,
 however, is deciding upon a suitable size for this array. Any reasonable size
 will place a severe upper limit on possible file sizes. Again, statistically
 speaking, most files are very small, so a very large array will mean wastage of
-space. </p>
+space.Â </p>
 
 <p align="center">
 <img src="wpe2.jpg">
@@ -144,7 +144,7 @@ The next block is the super block which contains the following
 information about the disk: 1)number of data blocks on the disk 2)
 number of inodes on the disk 3) number of free data blocks 4) number of
 free inodes
-5) list of free inodes 6)  list of free data blocks. The lists of free
+5) list of free inodes 6)Â  list of free data blocks. The lists of free
 inodes and free
 blocks are too large to fit inside a single block, so the fist few
 entries of the lists are maintained in
