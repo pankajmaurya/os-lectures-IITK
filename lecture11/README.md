@@ -217,6 +217,111 @@ sigfillset(&mask_set);
 - **Custom handlers:** Reset to default (SIG_DFL)
 - **Blocked signals:** Remain blocked (unaffected)
 
+## Signal Handling Example
+
+### Program Overview
+
+The following C program demonstrates practical signal handling by implementing a "three strikes" Ctrl-C handler:
+
+**Key Features:**
+- Catches SIGINT (Ctrl-C) signals using a custom handler
+- Requires 3 consecutive Ctrl-C presses before prompting for exit confirmation
+- Uses signal masking to prevent race conditions during handler execution
+- Demonstrates proper signal handler registration and re-registration
+
+**Code Summary:**
+```c
+// Global counter for Ctrl-C presses
+int ctrl_c_count = 0;
+#define CTRL_C_THRESHOLD 3
+
+void catch_int(int sig_num) {
+    // Block all signals during handler execution
+    sigfillset(&mask_set);
+    sigprocmask(SIG_SETMASK, &mask_set, &old_set);
+    
+    // Re-register handler for next signal
+    signal(SIGINT, catch_int);
+    
+    // Increment counter and check threshold
+    if (++ctrl_c_count >= CTRL_C_THRESHOLD) {
+        // Prompt user for exit confirmation
+        // Reset counter if user chooses to continue
+    }
+    // Signal mask automatically restored on return
+}
+```
+
+### Program Execution Flow
+
+```mermaid
+sequenceDiagram
+    participant U as User
+    participant P as Program
+    participant OS as Operating System
+    participant H as Signal Handler
+
+    P->>OS: Register SIGINT handler (catch_int)
+    P->>P: Enter infinite loop with pause()
+    
+    Note over U,P: User presses Ctrl-C (1st time)
+    U->>OS: Ctrl-C keypress
+    OS->>P: Send SIGINT
+    P->>H: Execute catch_int()
+    
+    Note over H: Handler execution begins
+    H->>OS: Block all signals (sigprocmask)
+    H->>OS: Re-register SIGINT handler
+    H->>H: ctrl_c_count = 1
+    Note over H: Count < 3, return to main
+    H->>OS: Restore signal mask (automatic)
+    H->>P: Return to pause()
+    
+    Note over U,P: User presses Ctrl-C (2nd time)
+    U->>OS: Ctrl-C keypress
+    OS->>P: Send SIGINT
+    P->>H: Execute catch_int()
+    H->>H: ctrl_c_count = 2
+    Note over H: Count < 3, return to main
+    H->>P: Return to pause()
+    
+    Note over U,P: User presses Ctrl-C (3rd time)
+    U->>OS: Ctrl-C keypress
+    OS->>P: Send SIGINT
+    P->>H: Execute catch_int()
+    H->>H: ctrl_c_count = 3
+    Note over H: Count >= 3, prompt user
+    
+    H->>U: Display "Really Exit? [y/N]: "
+    U->>H: User input (y/n)
+    
+    alt User enters 'y' or 'Y'
+        H->>P: exit(0)
+        P->>OS: Program terminates
+    else User enters anything else
+        H->>H: Reset ctrl_c_count = 0
+        H->>U: Display "Continuing"
+        H->>P: Return to pause()
+        Note over P: Program continues waiting
+    end
+```
+
+### Key Implementation Details
+
+1. **Signal Masking**: The handler blocks all signals during execution to prevent race conditions
+2. **Handler Re-registration**: Each handler execution re-registers itself for the next signal
+3. **Threshold Logic**: Only prompts for exit after 3 consecutive Ctrl-C presses
+4. **Automatic Cleanup**: Signal masks are automatically restored when handler returns
+5. **Infinite Loop**: Main program uses `pause()` to wait efficiently for signals
+
+### Learning Points
+
+- **Race Condition Prevention**: Demonstrates proper use of `sigprocmask()` to block signals during critical sections
+- **Handler Persistence**: Shows how to maintain signal handlers across multiple invocations
+- **User Interaction**: Illustrates safe user input handling within signal handlers
+- **State Management**: Maintains counter state across signal handler invocations
+- **Graceful Exit**: Provides user control over program termination
+
 ## Key Takeaways
 
 1. **Asynchronous Nature:** Signals handle unexpected, seemingly random events
