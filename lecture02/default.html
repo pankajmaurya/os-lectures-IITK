@@ -1,257 +1,514 @@
-<html><head>
-  <title>Lecture Notes for CS330 (Lecture 2)</title></head>
-<body text="#000000" link="#000000" vlink="#000000" background="..\bg3.gif">
-                    
-<center>             
-<h2>Review of I/O Hardware
-<p> 
-Lecture-2<br>
-Operating Systems (CS330) </h2>
-</center>
-
-<h4>Lecturer: Deepak Gupta<br>
-Notes prepared by: Gopal Krishna <br>
-Lecture Date: July 31, 2004
-</h4>
-
-<h4>About this lecture</h4>
-         In this lecture, we will study, we will review some
-basic concepts of I/O organization in a computer.  This is
-essential to understand the working of an operating system.
-                 
-<h4>
-I/O Organization
-</h4>
-The CPU, I/O devices, and memory are connected by a <i>system bus</i>.
-The system bus contains address lines, data lines, and lines for control
-signals (Figure 1).  
-To read a certain memory location, the CPU places the address
-of the location on the address lines, and activates control signals
-that ask the memory controller to place the contents of the memory
-location on the data lines.  Similarly, to write a memory location,
-the CPU places the address and data on the bus, and activates control
-signals instructing the memory controller to write the data to the
-specified memory location.
-
-<center>
-<img src="io-org.jpg">
-<p>
-<b>Figure 1</b>: Typical I/O organization of a computer
-</center>
-
-<p>
-I/O devices are accessed similarly.  Each I/O device is
-connected to the corresponding device controller which is connected
-to the bus.  The device controller contains control registers, buffers etc.,
-that can be accessed by the (program running on the) CPU.
-To carry out I/O, usually the CPU would need to write some values
-in the device controller registers specifying the operation to be
-carried out.  In case of write operations, the CPU would also write
-the data to be written to the device in the device controller buffers.
-The device controller sends (possibly analog) signals to the actual
-device to carry out the requested I/O operation.  After the operation
-is over, the device controller indicates this by setting some bits
-etc., in some control registers.  In case of a read operation, the
-date from the device is available in the device controller buffer at
-this stage.
-
-<p>
-The question here is: how does a program access the registers
-and buffers in the device controller?  There are two commonly used
-mechanisms for this: memory mapped and I/O mapped I/O.
-
-<h4>Memory Mapped I/O</h4>
-In memory mapped I/O, the device registers and buffers etc., are 
-assigned addresses in the memory address space.  Note that in this
-case, the addresses assigned to device controller locations would
-never be the same as addresses assigned to locations in the main
-memory.  The program can then use the usual mov/load/store etc.
-instructions to access the device registers simply by specifying
-a device register address instead of a main memory address.
-
-<h4>I/O mapped I/O</h4>
-In I/O mapped I/O, the device registers are assigned addresses
-(called I/O addresses or I/O ports) in a separate address space
-distinct from the memory address space.  Clearly, in this case, special
-instructions are needed so that a program can access these 
-registers.  On the x86 architecture, the IN and OUT instructions
-can be used for reading from and writing to device registers
-respectively.
-
-<p>
-In practice, both memory mapped and I/O mapped schemes may be used,
-even for the same device.  For example, the status registers of a
-display controller may be I/O mapped but the frame buffer may be
-memory mapped.
-
-<h4>Direct Memory Access (DMA)</h4>
-To speed up large transfers of data from fast devices (such as disks),
-typically a dedicated DMA controller is used.  The DMA controller is
-connected to the bus, and can be programmed by the CPU to transfer a
-chunk of data from a specified I/O location to a specified memory location,
-or vice versa, or even from memory to memory.  Using DMA means that
-the CPU does not have to waste cycles in transferring data between
-device controllers and memory.  Note that while the DMA controller is
-active, it is competing with the CPU for control of the bus.  Since
-the CPU does not require to access memory very frequently (due to
-the recently used data being present in the cache), this still results
-in a significant speedup.
-
-<p>
-The other question is how does the CPU determine when a previously
-initiated I/O completes?  Note that from the CPU perspective, 
-I/O is always asynchronous, <i>i.e.,</i>
-the CPU initiates the I/O operation, and can then engage in some other
-computations till the I/O is complete.
-
-<p>
-There are two ways in which the CPU can find out when a previously
-initiated I/O has completed: polling and interrupts.  
-
-<h4>Polling</h4>
-In polling, the CPU needs to periodically check the status of the I/O
-operation by reading the status bits in the device controller registers.
-This process is called polling.  The disadvantage of this approach is
-the CPU has to waste cycles for polling.
-
-<h4>Interrupt Driven I/O</h4>
-
-Interrupts are external events asynchronously notified by I/O
-devices to the CPU.  The typical event of this kind is the 
-completion of an I/O operation.  When the interrupt occurs,
-the CPU immediately jumps to an <i>interrupt service routine</i>
-to do whatever processing is needed after completion of I/O.
-Interrupt handling is discussed in more detail in a later section.
-
-<p>
-Interrupts are notified to the CPU by means of an interrupt line
-shared by the device controller and the CPU.  Usually the CPU
-has just one (or a small number of) interrupt lines.  In this 
-case, multiple device controllers can share the interrupt line,
-using Daisy chaining for example.
-
-<p>
-If multiple devices share the interrupt line, the interrupt handler
-needs to first determine the source of interrupt.  This can again
-be done by polling.  A more efficient way of organizing interrupt
-lines is to use a dedicated interrupt controller chip.  Here the
-CPU interrupt line is shared only by the interrupt controller which
-in turn shares one interrupt line with each of the device controllers.
-In this case, the interrupt controller can directly inform the
-source of interrupt to the CPU.  This kind of interrupt organization
-is called <i>vectored interrupts</i>.  The interrupt vector is
-communicated by the interrupt controller to the CPU.  The interrupt
-controller uses this as an index into a table that stores the addresses
-interrupt service routines for various devices (this table is also
-often called the interrupt vector).
-
-<h4>Interrupt Handling</h4>
-
-Interrupts are called asynchronous events because they can occur at
-any instant with respect to the program execution.  However at a 
-micro level, interrupt handling is really synchronous.  Just before
-every fetch cycle, the CPU checks the state of the interrupt line,
-and if it is active, starts the process of interrupt handling
-(described below).
-
-<p>
-When the CPU sees the interrupt line to be active, it has to start
-executing the interrupt service routine specified by the interrupt
-vector.  But in order that interrupt handling is transparent to the
-program running on the CPU (when the interrupt came), it is important
-that the entire processor state be saved before executing the
-interrupt service routine, and restored when it finishes.
-
-<p>
-Therefore, before jumping to the interrupt service routine, the CPU
-automatically saves a few critical registers such as program counter,
-processor status word etc., (usually on the stack since interrupts can 
-be nested) before jumping to the interrupt handler.  The interrupt
-handler, typically, first saves the general purpose registers that
-it is likely to use (often <i>all</i> general purpose registers).
-It then does the necessary actions to service the interrupt.  The
-actions typically include copying data from the controller buffer,
-and initiating the next I/O request pending for the device.
-Finally the interrupt handler restores the registers it had saved,
-and executes a special instruction (IRET on x86) that asks the CPU
-to restore the state saved at the time of occurrence of the interrupt.
-Since the restored state includes the value of the program counter
-register, the next instruction to be executed by the CPU is the
-next instruction in the original instruction sequence being executed
-when the interrupt came.
-
-<h4>Interrupt Control</h4>
-Interrupt handling is a critical activity that usually needs to be performed
-fast and in a time-bound manner.  Therefore, interrupts are usually disabled
-while handling interrupts.  Interrupts may also need to be disabled in
-the operating system code for other reasons that we will study later in
-the course.  On x86 processors, the EI and DI instructions can be used
-to enable and disable interrupts respectively.  Note that disabling 
-interrupts means that the CPU will not acknowledge and handle the interrupt
-even if the interrupt line is active.
-
-<P>
-Usually, interrupts from different devices are assigned <i>priorities</i>.
-The idea is that while handling a particular interrupt, interrupts of
-lower priorities can be disabled while higher priority interrupts are
-still permitted.  Disabling interrupts at a certain priority level can
-be achieved by programming the interrupt controller (in the same way
-as device controllers are programmed).  The interrupt controller implements
-logic that blocks interrupts at a priority level below this level
-<i>i.e.</i>, such interrupts are not reported to the CPU by the interrupt
-controller.
-
-<p>
-Note that if an interrupt from a certain device occurs while a previous
-interrupt from the same device is still pending, the CPU will ultimately
-see only one instance of interrupt from this device.  That is, one of
-the interrupts has been <i>lost</i>.  To avoid such situations, it is
-important that interrupts are not disabled for large periods of time.
-
-<p>
-<h4>Timer Interrupts</h4>
-An important interrupt from the OS interrupt is the timer interrupt.
-This is sent to the CPU by a timer controller at periodic intervals.
-The period of the interrupt is usually programmable.
-The timer interrupt permits the OS to keep track of time.  This is
-critical since several policies of the OS, as we will see later,
-are time dependent.  The timer interrupt also allows the OS to
-retain control over the CPU because it causes the (timer interrupt
-handler) code in the OS to be invoked periodically.  The typical
-timer interrupt period if from 10 to 20 ms.
-
-<h4>Exceptions and Traps</h4>
-An exception is the occurrence of some error during execution of
-an instruction on the CPU (such as divide by zero, attempt to
-access illegal memory address etc.).  When the exception occurs,
-the CPU performs actions very similar to interrupt handling
-(saving registers, and jumping to an exception handler).  The
-exception handler, which is a part of the OS, typically terminates
-the user program that caused the exception to occur.
-<p>
-A trap is a ``software generated interrupt''.  A program can use
-a special instruction (INT on x86) to generate a trap.  Again
-trap handling is very similar to interrupt and exception handling.
-Traps are useful in implementing system calls.  We will discuss
-this later.
-<p>
-Note that both exceptions and traps are synchronous events with
-respect to the program execution on the CPU.  Therefore, it is
-neither needed nor possible to disable interrupts and traps.
-                 
-         
-<h4>Related Links On Similar Topics</h4>
-                 
-<ul>
-           <li><a href="http://web.cse.iitk.ac.in/%7Ecs330/www03-04/notes/hw-review/ppframe.htm">Previous 
-    year's CS330 site</a></li>
-           <li><a href="http://www.siit.tu.ac.th/mdailey/class/2003_s2/its225/lectures/Lec11x4.pdf">http://www.siit.tu.ac.th/mdailey/class/2003_s2/its225/lectures/Lec11x4.pdf</a></li>
-           <li><a href="http://www.cs.albany.edu/%7Emaniatty/teaching/os/class08/lectfoils.pdf">http://www.cs.albany.edu/~maniatty/teaching/os/class08/lectfoils.pdf</a></li>
-           <li><a href="http://www.cs.umd.edu/class/spring2004/cmsc412/lectures/lect02/page-01.html">http://www.cs.umd.edu/class/spring2004/cmsc412/lectures/lect02/page-01.html</a></li>
-           <li><a href="http://ece-www.colorado.edu/%7Edconnors/OS/Nutt/Chap04.pdf">http://ece-www.colorado.edu/~dconnors/OS/Nutt/Chap04.pdf</a></li>
-           <li><a href="http://www.cs.kent.edu/%7Efarrell/osf03/oldnotes/L03.pdf">http://www.cs.kent.edu/~farrell/osf03/oldnotes/L03.pdf</a></li>
-           <li><a href="http://www.mcs.vuw.ac.nz/courses/COMP305/2004T1/LectureNotes/10.IOsubsystems.pdf">http://www.mcs.vuw.ac.nz/courses/COMP305/2004T1/LectureNotes/10.IOsubsystems.pdf</a><br>
-           </li>
-                 
-</ul>
-</body></html>
+<html><head>
+
+  <title>Lecture Notes for CS330 (Lecture 2)</title></head>
+
+<body text="#000000" link="#000000" vlink="#000000" background="..\bg3.gif">
+
+                    
+
+<center>             
+
+<h2>Review of I/O Hardware
+
+<p> 
+
+Lecture-2<br>
+
+Operating Systems (CS330) </h2>
+
+</center>
+
+
+
+<h4>Lecturer: Deepak Gupta<br>
+
+Notes prepared by: Gopal Krishna <br>
+
+Lecture Date: July 31, 2004
+
+</h4>
+
+
+
+<h4>About this lecture</h4>
+
+         In this lecture, we will study, we will review some
+
+basic concepts of I/O organization in a computer.  This is
+
+essential to understand the working of an operating system.
+
+                 
+
+<h4>
+
+I/O Organization
+
+</h4>
+
+The CPU, I/O devices, and memory are connected by a <i>system bus</i>.
+
+The system bus contains address lines, data lines, and lines for control
+
+signals (Figure 1).  
+
+To read a certain memory location, the CPU places the address
+
+of the location on the address lines, and activates control signals
+
+that ask the memory controller to place the contents of the memory
+
+location on the data lines.  Similarly, to write a memory location,
+
+the CPU places the address and data on the bus, and activates control
+
+signals instructing the memory controller to write the data to the
+
+specified memory location.
+
+
+
+<center>
+
+<img src="io-org.jpg">
+
+<p>
+
+<b>Figure 1</b>: Typical I/O organization of a computer
+
+</center>
+
+
+
+<p>
+
+I/O devices are accessed similarly.  Each I/O device is
+
+connected to the corresponding device controller which is connected
+
+to the bus.  The device controller contains control registers, buffers etc.,
+
+that can be accessed by the (program running on the) CPU.
+
+To carry out I/O, usually the CPU would need to write some values
+
+in the device controller registers specifying the operation to be
+
+carried out.  In case of write operations, the CPU would also write
+
+the data to be written to the device in the device controller buffers.
+
+The device controller sends (possibly analog) signals to the actual
+
+device to carry out the requested I/O operation.  After the operation
+
+is over, the device controller indicates this by setting some bits
+
+etc., in some control registers.  In case of a read operation, the
+
+date from the device is available in the device controller buffer at
+
+this stage.
+
+
+
+<p>
+
+The question here is: how does a program access the registers
+
+and buffers in the device controller?  There are two commonly used
+
+mechanisms for this: memory mapped and I/O mapped I/O.
+
+
+
+<h4>Memory Mapped I/O</h4>
+
+In memory mapped I/O, the device registers and buffers etc., are 
+
+assigned addresses in the memory address space.  Note that in this
+
+case, the addresses assigned to device controller locations would
+
+never be the same as addresses assigned to locations in the main
+
+memory.  The program can then use the usual mov/load/store etc.
+
+instructions to access the device registers simply by specifying
+
+a device register address instead of a main memory address.
+
+
+
+<h4>I/O mapped I/O</h4>
+
+In I/O mapped I/O, the device registers are assigned addresses
+
+(called I/O addresses or I/O ports) in a separate address space
+
+distinct from the memory address space.  Clearly, in this case, special
+
+instructions are needed so that a program can access these 
+
+registers.  On the x86 architecture, the IN and OUT instructions
+
+can be used for reading from and writing to device registers
+
+respectively.
+
+
+
+<p>
+
+In practice, both memory mapped and I/O mapped schemes may be used,
+
+even for the same device.  For example, the status registers of a
+
+display controller may be I/O mapped but the frame buffer may be
+
+memory mapped.
+
+
+
+<h4>Direct Memory Access (DMA)</h4>
+
+To speed up large transfers of data from fast devices (such as disks),
+
+typically a dedicated DMA controller is used.  The DMA controller is
+
+connected to the bus, and can be programmed by the CPU to transfer a
+
+chunk of data from a specified I/O location to a specified memory location,
+
+or vice versa, or even from memory to memory.  Using DMA means that
+
+the CPU does not have to waste cycles in transferring data between
+
+device controllers and memory.  Note that while the DMA controller is
+
+active, it is competing with the CPU for control of the bus.  Since
+
+the CPU does not require to access memory very frequently (due to
+
+the recently used data being present in the cache), this still results
+
+in a significant speedup.
+
+
+
+<p>
+
+The other question is how does the CPU determine when a previously
+
+initiated I/O completes?  Note that from the CPU perspective, 
+
+I/O is always asynchronous, <i>i.e.,</i>
+
+the CPU initiates the I/O operation, and can then engage in some other
+
+computations till the I/O is complete.
+
+
+
+<p>
+
+There are two ways in which the CPU can find out when a previously
+
+initiated I/O has completed: polling and interrupts.  
+
+
+
+<h4>Polling</h4>
+
+In polling, the CPU needs to periodically check the status of the I/O
+
+operation by reading the status bits in the device controller registers.
+
+This process is called polling.  The disadvantage of this approach is
+
+the CPU has to waste cycles for polling.
+
+
+
+<h4>Interrupt Driven I/O</h4>
+
+
+
+Interrupts are external events asynchronously notified by I/O
+
+devices to the CPU.  The typical event of this kind is the 
+
+completion of an I/O operation.  When the interrupt occurs,
+
+the CPU immediately jumps to an <i>interrupt service routine</i>
+
+to do whatever processing is needed after completion of I/O.
+
+Interrupt handling is discussed in more detail in a later section.
+
+
+
+<p>
+
+Interrupts are notified to the CPU by means of an interrupt line
+
+shared by the device controller and the CPU.  Usually the CPU
+
+has just one (or a small number of) interrupt lines.  In this 
+
+case, multiple device controllers can share the interrupt line,
+
+using Daisy chaining for example.
+
+
+
+<p>
+
+If multiple devices share the interrupt line, the interrupt handler
+
+needs to first determine the source of interrupt.  This can again
+
+be done by polling.  A more efficient way of organizing interrupt
+
+lines is to use a dedicated interrupt controller chip.  Here the
+
+CPU interrupt line is shared only by the interrupt controller which
+
+in turn shares one interrupt line with each of the device controllers.
+
+In this case, the interrupt controller can directly inform the
+
+source of interrupt to the CPU.  This kind of interrupt organization
+
+is called <i>vectored interrupts</i>.  The interrupt vector is
+
+communicated by the interrupt controller to the CPU.  The interrupt
+
+controller uses this as an index into a table that stores the addresses
+
+interrupt service routines for various devices (this table is also
+
+often called the interrupt vector).
+
+
+
+<h4>Interrupt Handling</h4>
+
+
+
+Interrupts are called asynchronous events because they can occur at
+
+any instant with respect to the program execution.  However at a 
+
+micro level, interrupt handling is really synchronous.  Just before
+
+every fetch cycle, the CPU checks the state of the interrupt line,
+
+and if it is active, starts the process of interrupt handling
+
+(described below).
+
+
+
+<p>
+
+When the CPU sees the interrupt line to be active, it has to start
+
+executing the interrupt service routine specified by the interrupt
+
+vector.  But in order that interrupt handling is transparent to the
+
+program running on the CPU (when the interrupt came), it is important
+
+that the entire processor state be saved before executing the
+
+interrupt service routine, and restored when it finishes.
+
+
+
+<p>
+
+Therefore, before jumping to the interrupt service routine, the CPU
+
+automatically saves a few critical registers such as program counter,
+
+processor status word etc., (usually on the stack since interrupts can 
+
+be nested) before jumping to the interrupt handler.  The interrupt
+
+handler, typically, first saves the general purpose registers that
+
+it is likely to use (often <i>all</i> general purpose registers).
+
+It then does the necessary actions to service the interrupt.  The
+
+actions typically include copying data from the controller buffer,
+
+and initiating the next I/O request pending for the device.
+
+Finally the interrupt handler restores the registers it had saved,
+
+and executes a special instruction (IRET on x86) that asks the CPU
+
+to restore the state saved at the time of occurrence of the interrupt.
+
+Since the restored state includes the value of the program counter
+
+register, the next instruction to be executed by the CPU is the
+
+next instruction in the original instruction sequence being executed
+
+when the interrupt came.
+
+
+
+<h4>Interrupt Control</h4>
+
+Interrupt handling is a critical activity that usually needs to be performed
+
+fast and in a time-bound manner.  Therefore, interrupts are usually disabled
+
+while handling interrupts.  Interrupts may also need to be disabled in
+
+the operating system code for other reasons that we will study later in
+
+the course.  On x86 processors, the EI and DI instructions can be used
+
+to enable and disable interrupts respectively.  Note that disabling 
+
+interrupts means that the CPU will not acknowledge and handle the interrupt
+
+even if the interrupt line is active.
+
+
+
+<P>
+
+Usually, interrupts from different devices are assigned <i>priorities</i>.
+
+The idea is that while handling a particular interrupt, interrupts of
+
+lower priorities can be disabled while higher priority interrupts are
+
+still permitted.  Disabling interrupts at a certain priority level can
+
+be achieved by programming the interrupt controller (in the same way
+
+as device controllers are programmed).  The interrupt controller implements
+
+logic that blocks interrupts at a priority level below this level
+
+<i>i.e.</i>, such interrupts are not reported to the CPU by the interrupt
+
+controller.
+
+
+
+<p>
+
+Note that if an interrupt from a certain device occurs while a previous
+
+interrupt from the same device is still pending, the CPU will ultimately
+
+see only one instance of interrupt from this device.  That is, one of
+
+the interrupts has been <i>lost</i>.  To avoid such situations, it is
+
+important that interrupts are not disabled for large periods of time.
+
+
+
+<p>
+
+<h4>Timer Interrupts</h4>
+
+An important interrupt from the OS interrupt is the timer interrupt.
+
+This is sent to the CPU by a timer controller at periodic intervals.
+
+The period of the interrupt is usually programmable.
+
+The timer interrupt permits the OS to keep track of time.  This is
+
+critical since several policies of the OS, as we will see later,
+
+are time dependent.  The timer interrupt also allows the OS to
+
+retain control over the CPU because it causes the (timer interrupt
+
+handler) code in the OS to be invoked periodically.  The typical
+
+timer interrupt period is from 10 to 20 ms.
+
+
+
+<h4>Exceptions and Traps</h4>
+
+An exception is the occurrence of some error during execution of
+
+an instruction on the CPU (such as divide by zero, attempt to
+
+access illegal memory address etc.).  When the exception occurs,
+
+the CPU performs actions very similar to interrupt handling
+
+(saving registers, and jumping to an exception handler).  The
+
+exception handler, which is a part of the OS, typically terminates
+
+the user program that caused the exception to occur.
+
+<p>
+
+A trap is a ``software generated interrupt''.  A program can use
+
+a special instruction (INT on x86) to generate a trap.  Again
+
+trap handling is very similar to interrupt and exception handling.
+
+Traps are useful in implementing system calls.  We will discuss
+
+this later.
+
+<p>
+
+Note that both exceptions and traps are synchronous events with
+
+respect to the program execution on the CPU.  Therefore, it is
+
+neither needed nor possible to disable interrupts and traps.
+
+                 
+
+         
+
+<h4>Related Links On Similar Topics</h4>
+
+                 
+
+<ul>
+
+           <li><a href="http://web.cse.iitk.ac.in/%7Ecs330/www03-04/notes/hw-review/ppframe.htm">Previous 
+
+    year's CS330 site</a></li>
+
+           <li><a href="http://www.siit.tu.ac.th/mdailey/class/2003_s2/its225/lectures/Lec11x4.pdf">http://www.siit.tu.ac.th/mdailey/class/2003_s2/its225/lectures/Lec11x4.pdf</a></li>
+
+           <li><a href="http://www.cs.albany.edu/%7Emaniatty/teaching/os/class08/lectfoils.pdf">http://www.cs.albany.edu/~maniatty/teaching/os/class08/lectfoils.pdf</a></li>
+
+           <li><a href="http://www.cs.umd.edu/class/spring2004/cmsc412/lectures/lect02/page-01.html">http://www.cs.umd.edu/class/spring2004/cmsc412/lectures/lect02/page-01.html</a></li>
+
+           <li><a href="http://ece-www.colorado.edu/%7Edconnors/OS/Nutt/Chap04.pdf">http://ece-www.colorado.edu/~dconnors/OS/Nutt/Chap04.pdf</a></li>
+
+           <li><a href="http://www.cs.kent.edu/%7Efarrell/osf03/oldnotes/L03.pdf">http://www.cs.kent.edu/~farrell/osf03/oldnotes/L03.pdf</a></li>
+
+           <li><a href="http://www.mcs.vuw.ac.nz/courses/COMP305/2004T1/LectureNotes/10.IOsubsystems.pdf">http://www.mcs.vuw.ac.nz/courses/COMP305/2004T1/LectureNotes/10.IOsubsystems.pdf</a><br>
+
+           </li>
+
+                 
+
+</ul>
+
+</body></html>
+
