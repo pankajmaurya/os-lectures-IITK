@@ -53,16 +53,36 @@ sequenceDiagram
 ```
 
 ```markdown
-Top of Stack
--------------
-| RAX       | ← Saved by ISR
+High Memory Address (RSP0 from TSS) ← Stack pointer before CPU pushes
+---------------------------------------------------------
+| RIP       | ← Pushed first by CPU
+| CS        |
+| RFLAGS    |
+| RSP       | ← Only on CPL change (user → kernel)
+| SS        | ← Only on CPL change
+| RCX       | ← Pushed by ISR
 | RBX       |
-| RCX       |
-| ...
-| RIP       | ← Saved by CPU
-| RFLAGS    | ← Saved by CPU
-| CS, SS    |
--------------
+| RAX       |
+---------------------------------------------------------
+Low Memory Address (Current RSP after ISR saves registers) = Top of Stack
+```
+
+```mermaid
+graph TD
+    high[High Memory Address]
+    rsp0[RSP0 from TSS<br>← Loaded by CPU on interrupt]
+    rip[RIP user ← Pushed by CPU]
+    cs[CS user ← Pushed by CPU]
+    rflags[RFLAGS ← Pushed by CPU]
+    ursp[RSP user ← Pushed by CPU]
+    ss[SS user ← Pushed by CPU]
+    rcx[RCX ← Saved by ISR]
+    rbx[RBX ← Saved by ISR]
+    rax[RAX ← Saved by ISR]
+    final_rsp[Final RSP points here<br>← Top of kernel stack after pushes]
+    low[Low Memory Address]
+
+    high --> rsp0 --> rip --> cs --> rflags --> ursp --> ss --> rcx --> rbx --> rax --> final_rsp --> low
 ```
 
 The following Mermaid diagram visualizes what happens when `IRETQ` is executed:
