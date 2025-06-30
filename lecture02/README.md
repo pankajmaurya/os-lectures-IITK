@@ -74,6 +74,15 @@ flowchart TD
     SecurityCheck --> Resume
     CheckPL -->|No| Resume
 ```
+Comparison between RET and IRET:
+```markdown
+| Feature                | `RET`                  | `IRET`                                          |
+| ---------------------- | ---------------------- | ----------------------------------------------- |
+| Used for               | Normal function return | Interrupt/exception return                      |
+| Pops                   | Just `RIP`/`EIP`       | `RIP`, `CS`, `RFLAGS`, (optionally `SS`, `RSP`) |
+| Handles Ring Changes   | ❌ No                   | ✅ Yes                                           |
+| Re-enables interrupts? | ❌ No                   | ✅ If IF flag was set                            |
+```
 
 ### Important Concepts
 - **Interrupt transparency**: Interrupt handling must be invisible to running programs
