@@ -35,6 +35,18 @@ Since I/O operations are asynchronous, the CPU uses two methods to detect comple
 5. Restore all saved registers
 6. Return to original program execution using special instruction (IRET)
 
+```markdown
+Top of Stack
+-------------
+| RAX       | ← Saved by ISR
+| RBX       |
+| RCX       |
+| ...
+| RIP       | ← Saved by CPU
+| RFLAGS    | ← Saved by CPU
+| CS, SS    |
+-------------
+```
 
 The following Mermaid diagram visualizes what happens when `IRETQ` is executed:
 
